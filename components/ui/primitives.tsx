@@ -78,7 +78,7 @@ export function TeamBadge({ abbr, size = 28 }: { abbr: string; size?: number }) 
         height: size,
         borderRadius: size * 0.28,
         fontSize: fs,
-        background: bg,
+        background: showImage ? 'transparent' : bg,
       }}
       aria-label={alt}
       role="img"
@@ -144,7 +144,7 @@ export function SectionHead({
   right?: ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-2.5 px-1 pt-[14px] pb-2">
+    <div className="flex items-center gap-2.5 px-1 pt-3.5 pb-2">
       {icon}
       <div className="font-head font-semibold text-[13px] tracking-[1.4px] uppercase text-ink-2 flex-1">
         {title}
@@ -184,7 +184,7 @@ export function OutDots({ outs = 0 }: { outs?: number }) {
         return (
           <div
             key={i}
-            className={`w-[7px] h-[7px] rounded-[4px] border-[1.4px] ${on ? "bg-accent border-accent" : "bg-transparent border-ink-2"
+            className={`w-1.75 h-1.75 rounded-sm border-[1.4px] ${on ? "bg-accent border-accent" : "bg-transparent border-ink-2"
               }`}
           />
         );
@@ -278,7 +278,7 @@ export function TopBar({
                 {t.icon({
                   size: 16,
                   stroke: active ? "var(--color-ink)" : "var(--color-ink-2)",
-                  fill: active ? "var(--color-ink)" : "none",
+                  fill: "none",
                 })}
                 <span>{t.label}</span>
               </button>
@@ -401,7 +401,7 @@ export function TabBar({
             {t.icon({
               size: 22,
               stroke: active ? "var(--color-accent)" : "var(--color-ink-2)",
-              fill: active ? "var(--color-accent)" : "none",
+              fill: "none",
             })}
             <span className="text-[10px] font-semibold tracking-[0.2px]">{t.label}</span>
           </button>

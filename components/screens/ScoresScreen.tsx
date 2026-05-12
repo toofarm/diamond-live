@@ -55,12 +55,7 @@ export function ScoresScreen({
       >
         <div className="mt-3 bg-surface border border-line rounded-[14px] px-3.5 py-2.5 flex items-center gap-2.5">
           <span
-            className={`w-2 h-2 rounded-[4px] ${counts.live > 0 ? "bg-live" : "bg-ink-3"}`}
-            style={
-              counts.live > 0
-                ? { boxShadow: "0 0 0 4px color-mix(in srgb, var(--color-live) 20%, transparent)" }
-                : undefined
-            }
+            className={`w-2 h-2 rounded-[4px] ${counts.live > 0 ? "bg-live dl-live-pulse" : "bg-ink-3"}`}
           />
           <div className="flex-1 text-xs text-ink-2 font-ui">
             {games.length === 0 && loading ? (

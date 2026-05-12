@@ -41,7 +41,7 @@
       "status": "SCHEDULED",
       "statusDetail": "Scheduled",
       "dateISO": "2026-05-12",
-      "time": "10:15 PM",
+      "time": "2026-05-13T02:15:00Z",
       "pitchers": { "away": "Yoshinobu Yamamoto", "home": "Logan Webb" },
       "broadcast": "SportsNet LA",
       "venue": "Oracle Park"

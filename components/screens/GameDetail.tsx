@@ -17,6 +17,7 @@ import type {
 import { TEAMS } from "@/lib/mlb/teams";
 import { BackChevron, TeamBadge, BaseDiamond, Loader, OutDots } from "@/components/ui/primitives";
 import { DEFAULT_PREFS, useUser, type BoxScoreUnits } from "@/lib/storage";
+import { formatLocalTime } from "@/lib/date";
 
 /** Format pitch velocity in the user's preferred units. Returns the value + label. */
 function formatVelo(mph: number, units: BoxScoreUnits): { value: string; label: string } {
@@ -142,13 +143,15 @@ export function GameDetail({
           <div className="flex-1" />
           {isLive && (
             <span
-              className="text-[10px] font-bold text-live tracking-widest px-2 py-0.5 rounded-full"
+              data-cy="live-pill"
+              className="inline-flex items-center gap-1.5 text-[10px] font-bold text-live tracking-widest px-2 py-0.5 rounded-full"
               style={{
                 background: "color-mix(in srgb, var(--color-live) 12%, transparent)",
                 border: "1px solid color-mix(in srgb, var(--color-live) 40%, transparent)",
               }}
             >
-              ● LIVE
+              <span className="w-1.5 h-1.5 rounded-full bg-live dl-live-pulse" />
+              LIVE
             </span>
           )}
         </div>
@@ -184,7 +187,7 @@ export function GameDetail({
                         ? `${game.inningHalf ?? ""} ${game.inning ?? ""}${ord(game.inning)}`
                         : game.status === "FINAL"
                           ? "FINAL"
-                          : game.time ?? game.statusDetail}
+                          : formatLocalTime(game.time) ?? game.statusDetail}
                     </div>
                   </div>
                   <TeamColumn abbr={game.home} onTeam={onTeam} />
@@ -335,9 +338,19 @@ function SummaryTab({
   showWinProbability: boolean;
 }) {
   const { summary, linescore, plays, atBat, winProbability } = data;
+
+  // The server now hands us the freshest available at-bat: either the live one
+  // (isComplete=false) or, between at-bats, the just-finished one with its
+  // terminal pitch included (isComplete=true). That second case is what drives
+  // the result banner above the strike zone.
+  const showAtBatCard = summary.status === "LIVE" && !!atBat;
+  const priorOutcome = atBat?.isComplete ? plays[0] ?? null : null;
+
   return (
     <div className="flex flex-col gap-3.5">
-      {atBat && <AtBatCard ab={atBat} onPlayer={onPlayer} units={units} />}
+      {showAtBatCard && atBat && (
+        <AtBatCard ab={atBat} onPlayer={onPlayer} units={units} priorOutcome={priorOutcome} />
+      )}
 
       {linescore && (
         <div className="bg-surface border border-line rounded-[14px] px-1 py-3 overflow-x-auto">
@@ -475,12 +488,25 @@ function WinProbabilityCard({
 
 /* ── At-Bat card ──────────────────────────────────────────────── */
 
-function AtBatCard({ ab, onPlayer, units }: { ab: AtBat; onPlayer: (id: number) => void; units: BoxScoreUnits }) {
+function AtBatCard({
+  ab,
+  onPlayer,
+  units,
+  priorOutcome,
+}: {
+  ab: AtBat;
+  onPlayer: (id: number) => void;
+  units: BoxScoreUnits;
+  priorOutcome?: Play | null;
+}) {
+  const isPrior = !!priorOutcome;
   return (
     <div className="bg-surface border border-line rounded-[14px] overflow-hidden">
       <div className="px-3.5 py-2.5 flex items-center gap-2 border-b border-line-2">
-        <span className="w-1.5 h-1.5 rounded-[3px] bg-live" />
-        <span className="text-[10px] tracking-[1.2px] text-ink font-extrabold uppercase">At Bat</span>
+        {!isPrior && <span className="w-1.5 h-1.5 rounded-[3px] bg-live" />}
+        <span className="text-[10px] tracking-[1.2px] text-ink font-extrabold uppercase">
+          {isPrior ? "Last At Bat" : "At Bat"}
+        </span>
         <span className="font-mono text-[11px] text-ink-3 ml-1.5">{ab.inningLabel}</span>
         <div className="flex-1" />
         <span className="font-mono text-[11px] text-ink-3">
@@ -545,6 +571,19 @@ function AtBatCard({ ab, onPlayer, units }: { ab: AtBat; onPlayer: (id: number) 
       </div>
 
       <div className="p-3.5">
+        {priorOutcome && (
+          <div className="mb-3 flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-chip">
+            <span className="text-[9px] tracking-[1.4px] text-ink-3 font-extrabold uppercase shrink-0">
+              Result
+            </span>
+            {priorOutcome.tag && (
+              <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded-sm bg-accent text-white shrink-0">
+                {priorOutcome.tag}
+              </span>
+            )}
+            <div className="flex-1 text-[12px] text-ink leading-tight">{priorOutcome.desc}</div>
+          </div>
+        )}
         <StrikeZoneViz pitches={ab.pitches} hand={ab.batter.hand} units={units} />
       </div>
 
@@ -594,11 +633,14 @@ function StrikeZoneViz({ pitches, hand, units }: { pitches: Pitch[]; hand: "L" |
     <div className="relative flex justify-center">
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-[320px] h-auto block">
         <rect x={zoneL - 18} y={zoneT - 18} width={zw + 36} height={zh + 36} fill="var(--color-chip)" opacity={0.5} rx="3" />
-        <rect x={zoneL} y={zoneT} width={zw} height={zh} fill="var(--color-surface)" stroke="var(--color-ink-2)" strokeWidth="1.5" />
-        <line x1={zoneL + zw / 3} y1={zoneT} x2={zoneL + zw / 3} y2={zoneB} stroke="var(--color-line)" strokeWidth="0.75" />
-        <line x1={zoneL + (2 * zw) / 3} y1={zoneT} x2={zoneL + (2 * zw) / 3} y2={zoneB} stroke="var(--color-line)" strokeWidth="0.75" />
-        <line x1={zoneL} y1={zoneT + zh / 3} x2={zoneR} y2={zoneT + zh / 3} stroke="var(--color-line)" strokeWidth="0.75" />
-        <line x1={zoneL} y1={zoneT + (2 * zh) / 3} x2={zoneR} y2={zoneT + (2 * zh) / 3} stroke="var(--color-line)" strokeWidth="0.75" />
+        <rect x={zoneL} y={zoneT} width={zw} height={zh} fill="var(--color-surface)" />
+        <g key={pitches.length} fill="none">
+          <rect x={zoneL} y={zoneT} width={zw} height={zh} pathLength="1" stroke="var(--color-ink-2)" strokeWidth="1.5" className="dl-zone-demarc" />
+          <line x1={zoneL + zw / 3} y1={zoneT} x2={zoneL + zw / 3} y2={zoneB} pathLength="1" stroke="var(--color-line)" strokeWidth="0.75" className="dl-zone-demarc" style={{ animationDelay: "120ms" }} />
+          <line x1={zoneL + (2 * zw) / 3} y1={zoneT} x2={zoneL + (2 * zw) / 3} y2={zoneB} pathLength="1" stroke="var(--color-line)" strokeWidth="0.75" className="dl-zone-demarc" style={{ animationDelay: "180ms" }} />
+          <line x1={zoneL} y1={zoneT + zh / 3} x2={zoneR} y2={zoneT + zh / 3} pathLength="1" stroke="var(--color-line)" strokeWidth="0.75" className="dl-zone-demarc" style={{ animationDelay: "240ms" }} />
+          <line x1={zoneL} y1={zoneT + (2 * zh) / 3} x2={zoneR} y2={zoneT + (2 * zh) / 3} pathLength="1" stroke="var(--color-line)" strokeWidth="0.75" className="dl-zone-demarc" style={{ animationDelay: "300ms" }} />
+        </g>
 
         <text x={zoneL - 6} y={zoneT - 6} fontSize="8" fill="var(--color-ink-3)" fontFamily="var(--font-mono)" letterSpacing="0.5" textAnchor="end">
           HIGH
@@ -1074,7 +1116,7 @@ function SprayField({ points }: { points: SprayPoint[] }) {
   const diamond = `${HOME_X},${HOME_Y} ${HOME_X + 30},${HOME_Y - 30} ${HOME_X},${HOME_Y - 60} ${HOME_X - 30},${HOME_Y - 30}`;
 
   return (
-    <svg viewBox="0 0 250 240" className="w-full h-auto block mb-2.5">
+    <svg viewBox="0 0 250 240" className="w-full h-auto block mb-2.5 lg:max-w-[420px] lg:mx-auto">
       {/* Foul lines */}
       <line x1={HOME_X} y1={HOME_Y} x2={wallLF.x} y2={wallLF.y} stroke="var(--color-ink-3)" strokeWidth="1" />
       <line x1={HOME_X} y1={HOME_Y} x2={wallRF.x} y2={wallRF.y} stroke="var(--color-ink-3)" strokeWidth="1" />

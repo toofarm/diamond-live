@@ -13,7 +13,7 @@ describe("/game/[id]", () => {
   });
 
   it("load /game/1 → hero shows score, LIVE pill, and bases/B-K/OUTS strip", () => {
-    cy.contains("● LIVE").should("be.visible");
+    cy.get('[data-cy="live-pill"]').should("be.visible").and("contain", "LIVE");
     // Hero score uses a 42px headline with the two team scores separated by en-dash.
     cy.get('[data-cy="hero-headline"]').should("contain", "4").and("contain", "2");
     cy.contains(/TOP\s+7/i).should("be.visible");

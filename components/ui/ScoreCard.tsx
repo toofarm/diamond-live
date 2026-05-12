@@ -2,6 +2,7 @@
 
 import { TeamBadge, BaseDiamond, OutDots } from "./primitives";
 import type { GameSummary } from "@/lib/mlb/types";
+import { formatLocalTime } from "@/lib/date";
 
 export function ScoreCard({
   game,
@@ -42,10 +43,7 @@ export function ScoreCard({
       <div className="flex items-center gap-2 mb-1">
         {isLive ? (
           <>
-            <span
-              className="w-[7px] h-[7px] rounded-[4px] bg-live"
-              style={{ boxShadow: "0 0 0 3px color-mix(in srgb, var(--color-live) 25%, transparent)" }}
-            />
+            <span className="w-[7px] h-[7px] rounded-[4px] bg-live dl-live-pulse" />
             <span
               data-cy="score-card-status"
               className="text-[11px] font-bold text-live tracking-widest uppercase"
@@ -65,7 +63,7 @@ export function ScoreCard({
             data-cy="score-card-status"
             className="text-xs font-semibold text-ink-2 font-mono"
           >
-            {game.time ?? game.statusDetail}
+            {formatLocalTime(game.time) ?? game.statusDetail}
           </span>
         )}
         <div className="flex-1" />

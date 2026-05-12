@@ -186,6 +186,7 @@ export const FIXTURE_LIVE_GAME: GameDetailData = {
       { n: 2, type: "SI", velo: 97.9, x:  0.2, y: -0.2, result: "strike", label: "Called strike" },
       { n: 3, type: "FF", velo: 98.7, x:  0.9, y:  0.8, result: "ball",   label: "Ball, high" },
     ],
+    isComplete: false,
   },
   winProbability: { away: 68, home: 32 },
   spray: [

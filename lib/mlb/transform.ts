@@ -31,11 +31,14 @@ import type {
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-function fmtLocalTime(iso: string | undefined): string | undefined {
+/** Pass an ISO timestamp through if valid; the UI formats it in the user's
+   local timezone via lib/date.ts:formatLocalTime. Formatting server-side would
+   silently use the server's timezone instead of the viewer's. */
+function passThroughISO(iso: string | undefined): string | undefined {
   if (!iso) return undefined;
   const d = new Date(iso);
   if (Number.isNaN(+d)) return undefined;
-  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return iso;
 }
 
 function dateISOFromGameDate(iso: string | undefined): string {
@@ -88,7 +91,7 @@ export function mapScheduleGame(g: any, dateISO?: string): GameSummary | null {
     status,
     statusDetail: g?.status?.detailedState,
     dateISO: dateISO ?? dateISOFromGameDate(g?.gameDate),
-    time: fmtLocalTime(g?.gameDate),
+    time: passThroughISO(g?.gameDate),
     pitchers: {
       away: readPitcher(g?.teams?.away?.probablePitcher),
       home: readPitcher(g?.teams?.home?.probablePitcher),
@@ -127,7 +130,7 @@ export function mapScheduleListGame(g: any, dateISO: string): ScheduleGame | nul
     away_score: typeof g?.teams?.away?.score === "number" ? g.teams.away.score : undefined,
     home_score: typeof g?.teams?.home?.score === "number" ? g.teams.home.score : undefined,
     status,
-    time: fmtLocalTime(g?.gameDate),
+    time: passThroughISO(g?.gameDate),
     statusDetail: g?.status?.detailedState,
     series: g?.seriesGameNumber && g?.gamesInSeries ? { idx: g.seriesGameNumber, len: g.gamesInSeries } : undefined,
   };
@@ -279,13 +282,31 @@ function mapBoxPitching(side: any): BoxPitchingRow[] {
   return rows;
 }
 
-/** Build an AtBat snapshot from the current plate-appearance play (if game is live). */
+/** Build an AtBat snapshot from the current plate-appearance play (if game is live).
+   When currentPlay has no pitch events yet (between at-bats / between innings),
+   fall back to the most recently completed play in allPlays so the just-finished
+   at-bat — including its terminal pitch — stays on screen until the next batter
+   sees a pitch. The fallback emits isComplete=true so the client can banner it. */
 function mapAtBat(feed: any): AtBat | null {
   const live = feed?.liveData;
-  const cur = live?.plays?.currentPlay;
-  if (!cur) return null;
-  const events = cur?.playEvents ?? [];
-  const pitchEvents = events.filter((e: any) => e?.isPitch);
+  const currentPlay = live?.plays?.currentPlay;
+  const currentPitches = (currentPlay?.playEvents ?? []).filter((e: any) => e?.isPitch);
+
+  let cur = currentPlay;
+  let pitchEvents = currentPitches;
+  let isComplete = Boolean(currentPlay?.about?.isComplete);
+
+  if (!cur || pitchEvents.length === 0) {
+    const allPlays = (live?.plays?.allPlays ?? []) as any[];
+    const fallback = [...allPlays].reverse().find((p: any) => {
+      if (!p?.result?.event) return false;
+      return (p?.playEvents ?? []).some((e: any) => e?.isPitch);
+    });
+    if (!fallback) return null;
+    cur = fallback;
+    pitchEvents = (cur?.playEvents ?? []).filter((e: any) => e?.isPitch);
+    isComplete = true;
+  }
   if (pitchEvents.length === 0) return null;
 
   const pitches: Pitch[] = pitchEvents.map((e: any, i: number): Pitch => {
@@ -382,6 +403,7 @@ function mapAtBat(feed: any): AtBat | null {
       Boolean(matchup?.postOnThird),
     ],
     pitches,
+    isComplete,
   };
 
   // suppress unused warning for the dest variable
@@ -389,7 +411,7 @@ function mapAtBat(feed: any): AtBat | null {
   return ab;
 }
 
-export function mapGameDetail(feed: any, dateISO?: string): GameDetailData {
+export function mapGameDetail(feed: any, dateISO?: string, winProbabilityFeed?: any): GameDetailData {
   const game = feed?.gameData;
   const live = feed?.liveData;
   const awayId = game?.teams?.away?.id;
@@ -409,7 +431,7 @@ export function mapGameDetail(feed: any, dateISO?: string): GameDetailData {
     status,
     statusDetail: game?.status?.detailedState,
     dateISO: dateISO ?? dateISOFromGameDate(game?.datetime?.dateTime),
-    time: fmtLocalTime(game?.datetime?.dateTime),
+    time: passThroughISO(game?.datetime?.dateTime),
     venue: game?.venue?.name,
     weather: game?.weather?.condition,
   };
@@ -440,7 +462,7 @@ export function mapGameDetail(feed: any, dateISO?: string): GameDetailData {
   const homePitching = decoratePitching(mapBoxPitching(box?.teams?.home), usageByPitcher, gameIsLive);
 
   const atBat = status === "LIVE" ? mapAtBat(feed) : null;
-  const winProbability = readWinProbability(live);
+  const winProbability = readWinProbability(winProbabilityFeed);
   const spray = computeBatterSprays(allPlays, awayAbbr, homeAbbr, awayId, homeId);
 
   return {
@@ -617,19 +639,26 @@ function decoratePitching(
 }
 
 /**
- * Pull the most recent home/away win probability from the live feed.
- * MLB exposes per-play `homeWinProbability` (0–100); we scan from the end of
- * allPlays for the latest play that has it set. Returns null if unavailable
- * (pregame, no data, or final games where the field is absent).
+ * Pull the most recent home/away win probability from the dedicated
+ * `/api/v1/game/{gamePk}/winProbability` endpoint, which returns an array of
+ * play entries each with `homeTeamWinProbability` and `awayTeamWinProbability`
+ * (0–100). We scan from the end for the latest entry that has those set.
+ * Returns null if unavailable (pregame, missing endpoint payload, etc.) — the
+ * live feed itself does NOT carry per-play win-probability fields, so we rely
+ * on this auxiliary endpoint instead.
  */
-function readWinProbability(live: any): { home: number; away: number } | null {
-  const all = (live?.plays?.allPlays ?? []) as any[];
-  for (let i = all.length - 1; i >= 0; i--) {
-    const p = all[i];
-    const home = p?.homeWinProbability;
+function readWinProbability(wpFeed: any): { home: number; away: number } | null {
+  const entries = Array.isArray(wpFeed) ? wpFeed : [];
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const p = entries[i];
+    const home = p?.homeTeamWinProbability;
+    const away = p?.awayTeamWinProbability;
     if (typeof home === "number" && Number.isFinite(home)) {
       const h = Math.max(0, Math.min(100, home));
-      return { home: h, away: 100 - h };
+      const a = typeof away === "number" && Number.isFinite(away)
+        ? Math.max(0, Math.min(100, away))
+        : 100 - h;
+      return { home: h, away: a };
     }
   }
   return null;

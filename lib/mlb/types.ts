@@ -11,7 +11,7 @@ export interface GameSummary {
   homeScore: number | null;
   status: GameStatus;
   statusDetail?: string;      // raw MLB detailed state
-  time?: string;              // local time string like "7:05 PM" (for SCHEDULED)
+  time?: string;              // ISO 8601 game-start timestamp (formatted client-side via lib/date.ts:formatLocalTime)
   dateISO: string;            // YYYY-MM-DD (game's official date)
 
   // LIVE-only
@@ -151,6 +151,10 @@ export interface AtBat {
   outs: number;
   bases: [boolean, boolean, boolean];
   pitches: Pitch[];
+  /** True when this snapshot is the just-finished plate appearance (terminal
+     pitch included), false while the at-bat is in progress. The client uses
+     this to decide whether to render the result banner above the strike zone. */
+  isComplete: boolean;
 }
 
 export interface StandingsRow {
@@ -169,7 +173,7 @@ export interface ScheduleGame {
   away_score?: number;
   home_score?: number;
   status: GameStatus;
-  time?: string;
+  time?: string;             // ISO 8601 game-start timestamp (formatted client-side via lib/date.ts:formatLocalTime)
   statusDetail?: string;
   series?: { idx: number; len: number };
 }

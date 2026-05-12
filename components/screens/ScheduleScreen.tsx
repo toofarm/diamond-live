@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useApi } from "@/lib/mlb/client";
 import type { ScheduleGame } from "@/lib/mlb/types";
 import { TEAMS } from "@/lib/mlb/teams";
-import { formatDateLabel } from "@/lib/date";
+import { formatDateLabel, formatLocalTime } from "@/lib/date";
 import { AppBar, Loader, TeamBadge } from "@/components/ui/primitives";
 import { IconChevron, IconClose, IconCheck, IconSearch } from "@/components/ui/icons";
 
@@ -363,7 +363,7 @@ function ScheduleGameRow({
         ) : isFinal ? (
           <span className="text-[10px] font-bold text-ink-2 tracking-[0.8px] uppercase">FINAL</span>
         ) : (
-          <span className="font-mono text-xs text-ink-2 font-semibold">{game.time ?? "TBD"}</span>
+          <span className="font-mono text-xs text-ink-2 font-semibold">{formatLocalTime(game.time) ?? "TBD"}</span>
         )}
       </div>
       <Side
