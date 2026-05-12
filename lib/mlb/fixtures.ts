@@ -63,12 +63,48 @@ export const FIXTURE_LIVE_GAME: GameDetailData = {
     { id: 656555, name: "J. Rojas",     pos: "CF", ab: 3, r: 0, h: 0, rbi: 0, bb: 0, k: 1, avg: ".208" },
   ],
   awayPitching: [
-    { id: 605135, name: "K. Senga",   ip: "6.0", h: 5, r: 2, er: 2, bb: 2, k: 7, hr: 0, era: "3.18", pitches: 94 },
-    { id: 624133, name: "R. Garrett", ip: "0.1", h: 1, r: 0, er: 0, bb: 0, k: 1, hr: 0, era: "2.74", pitches: 8 },
+    {
+      id: 605135,
+      name: "Kodai Senga",
+      ip: "5.2", h: 5, r: 2, er: 2, bb: 2, k: 7, hr: 0,
+      era: "3.18", pitches: 92, live: true,
+      pitchUsage: [
+        { type: "FS", count: 26 },
+        { type: "FF", count: 24 },
+        { type: "CT", count: 16 },
+        { type: "SL", count: 13 },
+        { type: "CB", count: 8 },
+        { type: "SI", count: 5 },
+      ],
+    },
   ],
   homePitching: [
-    { id: 642547, name: "A. Nola",    ip: "5.2", h: 6, r: 3, er: 3, bb: 2, k: 6, hr: 0, era: "4.02", pitches: 92 },
-    { id: 669373, name: "J. Strahm",  ip: "1.0", h: 2, r: 1, er: 1, bb: 0, k: 1, hr: 0, era: "2.81", pitches: 18 },
+    {
+      id: 554430,
+      name: "Zack Wheeler",
+      ip: "6.0", h: 6, r: 3, er: 3, bb: 2, k: 6, hr: 0,
+      era: "3.45", pitches: 101,
+      pitchUsage: [
+        { type: "FF", count: 41 },
+        { type: "SI", count: 19 },
+        { type: "SL", count: 18 },
+        { type: "CT", count: 13 },
+        { type: "CB", count: 6 },
+        { type: "CH", count: 4 },
+      ],
+    },
+    {
+      id: 669373,
+      name: "Matt Strahm",
+      ip: "0.1", h: 2, r: 1, er: 1, bb: 0, k: 1, hr: 0,
+      era: "2.81", pitches: 13, live: true,
+      pitchUsage: [
+        { type: "FF", count: 6 },
+        { type: "SL", count: 4 },
+        { type: "CB", count: 2 },
+        { type: "CH", count: 1 },
+      ],
+    },
   ],
   plays: [
     {
@@ -123,9 +159,9 @@ export const FIXTURE_LIVE_GAME: GameDetailData = {
     inningLabel: "TOP 7 · 1 OUT",
     pitcher: {
       id: 669373,
-      name: "Jose Alvarado",
-      firstName: "Jose",
-      lastName: "Alvarado",
+      name: "Matt Strahm",
+      firstName: "Matt",
+      lastName: "Strahm",
       team: "PHI",
       hand: "L",
       pitchCountGame: 14,

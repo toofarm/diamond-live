@@ -433,8 +433,10 @@ export function mapGameDetail(feed: any, dateISO?: string): GameDetailData {
   const box = live?.boxscore ?? {};
   const awayLineup = mapBoxLineup(box?.teams?.away);
   const homeLineup = mapBoxLineup(box?.teams?.home);
-  const awayPitching = mapBoxPitching(box?.teams?.away);
-  const homePitching = mapBoxPitching(box?.teams?.home);
+  const allPlays = (live?.plays?.allPlays ?? []) as any[];
+  const usageByPitcher = computePitchUsageByPitcher(allPlays);
+  const awayPitching = decoratePitching(mapBoxPitching(box?.teams?.away), usageByPitcher);
+  const homePitching = decoratePitching(mapBoxPitching(box?.teams?.home), usageByPitcher);
 
   const atBat = status === "LIVE" ? mapAtBat(feed) : null;
   const winProbability = readWinProbability(live);
@@ -450,6 +452,48 @@ export function mapGameDetail(feed: any, dateISO?: string): GameDetailData {
     atBat,
     winProbability,
   };
+}
+
+/**
+ * Walk every plate appearance and tally pitch-type counts per pitcher. Returns
+ * a map keyed by pitcher player id → { typeCode: count }. Pitches without a
+ * recognizable type code are skipped (intentional pitches, pickoffs, etc.).
+ */
+function computePitchUsageByPitcher(allPlays: any[]): Map<number, Record<string, number>> {
+  const out = new Map<number, Record<string, number>>();
+  for (const p of allPlays) {
+    const pitcherId = p?.matchup?.pitcher?.id;
+    if (typeof pitcherId !== "number") continue;
+    const events = (p?.playEvents ?? []) as any[];
+    for (const ev of events) {
+      if (!ev?.isPitch) continue;
+      const code = ev?.details?.type?.code;
+      if (typeof code !== "string" || code.length === 0) continue;
+      const counts = out.get(pitcherId) ?? {};
+      counts[code] = (counts[code] ?? 0) + 1;
+      out.set(pitcherId, counts);
+    }
+  }
+  return out;
+}
+
+/**
+ * Attach `pitchUsage` (from the play-events tally) and mark the last entry as
+ * `live` — that's the team's currently-pitching or most-recently-pitched arm.
+ */
+function decoratePitching(
+  rows: import("./types").BoxPitchingRow[],
+  usageByPitcher: Map<number, Record<string, number>>,
+): import("./types").BoxPitchingRow[] {
+  if (rows.length === 0) return rows;
+  return rows.map((row, i) => {
+    const counts = usageByPitcher.get(row.id);
+    const pitchUsage = counts
+      ? Object.entries(counts).map(([type, count]) => ({ type, count }))
+      : undefined;
+    const live = i === rows.length - 1 ? true : undefined;
+    return { ...row, pitchUsage, live };
+  });
 }
 
 /**

@@ -26,11 +26,32 @@ const PITCH_RESULT_COLORS: Record<Pitch["result"], { fill: string; ink: string; 
 };
 
 const PITCH_TYPE_NAMES: Record<string, string> = {
-  FF: "4-Seam", SI: "Sinker", SL: "Slider",
-  CB: "Curve", CU: "Curve", CH: "Change",
+  FF: "4-Seam", FT: "2-Seam", SI: "Sinker", SL: "Slider",
+  CB: "Curve", CU: "Curve", CH: "Changeup",
   CT: "Cutter", FC: "Cutter", FS: "Splitter",
   KC: "Knuckle", EP: "Eephus", FO: "Forkball",
 };
+
+/** Color per pitch type, used in the pitch-usage card on the Pitches tab. */
+const PITCH_USAGE_COLORS: Record<string, string> = {
+  FF: "#B83A2A", // 4-Seam — rust red
+  FT: "#B83A2A", // 2-Seam
+  SI: "#D97C2A", // Sinker — orange
+  SL: "#2F6BD9", // Slider — cobalt
+  FS: "#5DA3DA", // Splitter — sky blue
+  CT: "#B95A92", // Cutter — magenta
+  FC: "#B95A92",
+  CB: "#5B3DAA", // Curve — purple
+  CU: "#5B3DAA",
+  KC: "#5B3DAA",
+  CH: "#2E9D5B", // Changeup — green
+  EP: "#8A8077",
+  FO: "#8A8077",
+};
+
+function pitchColor(code: string): string {
+  return PITCH_USAGE_COLORS[code] ?? "#8A8077";
+}
 
 function ord(n?: number) {
   if (!n) return "";
@@ -87,7 +108,7 @@ export function GameDetail({
     observerRef.current = ro;
   }, []);
   const onScrollContent = (e: React.UIEvent<HTMLDivElement>) => {
-    setScrolled(e.currentTarget.scrollTop > 75);
+    setScrolled(e.currentTarget.scrollTop > 15);
   };
 
   return (
@@ -772,13 +793,24 @@ function PlaysTab({ plays }: { plays: Play[] }) {
 /* ── Pitches tab ──────────────────────────────────────────────── */
 
 function PitchesTab({ data, units }: { data: GameDetailData; units: BoxScoreUnits }) {
-  const plays = data.plays.filter((p) => p.pitchSeq && p.pitchSeq.length > 0);
-  if (plays.length === 0) {
+  const { summary, awayPitching, homePitching } = data;
+  const playsWithPitches = data.plays.filter((p) => p.pitchSeq && p.pitchSeq.length > 0);
+  const hasUsage = [...awayPitching, ...homePitching].some(
+    (p) => p.pitchUsage && p.pitchUsage.length > 0,
+  );
+
+  if (!hasUsage && playsWithPitches.length === 0) {
     return <div className="p-6 text-ink-3 text-center">No pitch data yet.</div>;
   }
+
   return (
     <div className="flex flex-col gap-3">
-      {plays.map((p, i) => (
+      <PitchUsageCard abbr={summary.away} pitchers={awayPitching} />
+      <PitchUsageCard abbr={summary.home} pitchers={homePitching} />
+
+      <h3>Recent At-Bats</h3>
+
+      {playsWithPitches.map((p, i) => (
         <div key={i} className="bg-surface border border-line rounded-[14px] overflow-hidden">
           <div className="px-3.5 py-2.5 border-b border-line-2">
             <div className="font-mono text-[10px] text-ink-3">{p.half}</div>
@@ -805,6 +837,78 @@ function PitchesTab({ data, units }: { data: GameDetailData; units: BoxScoreUnit
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+/* ── Pitch usage ──────────────────────────────────────────────── */
+
+/** Per-team card listing each pitcher's pitch-type breakdown for this game. */
+function PitchUsageCard({ abbr, pitchers }: { abbr: string; pitchers: BoxPitchingRow[] }) {
+  const withUsage = pitchers.filter((p) => p.pitchUsage && p.pitchUsage.length > 0);
+  if (withUsage.length === 0) return null;
+  return (
+    <div className="bg-surface border border-line rounded-[14px] p-3.5">
+      <div className="text-[10px] tracking-[1.2px] uppercase text-ink-3 font-bold mb-3">
+        {abbr} · Pitching
+      </div>
+      <div className="flex flex-col gap-5">
+        {withUsage.map((p) => (
+          <PitcherUsage key={p.id} pitcher={p} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PitcherUsage({ pitcher }: { pitcher: BoxPitchingRow }) {
+  const usage = (pitcher.pitchUsage ?? []).slice().sort((a, b) => b.count - a.count);
+  const total = usage.reduce((s, e) => s + e.count, 0);
+  if (total === 0) return null;
+  const entries = usage.map((e) => ({ ...e, pct: Math.round((e.count / total) * 100) }));
+
+  return (
+    <div>
+      <div className="flex items-baseline gap-2 mb-2.5">
+        <span className="font-head text-[20px] font-bold text-ink tracking-[-0.5px] leading-none">
+          {pitcher.name}
+        </span>
+        {pitcher.live && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold tracking-[1.2px] text-live">
+            <span className="w-1.5 h-1.5 rounded-full bg-live" />
+            LIVE
+          </span>
+        )}
+        <div className="flex-1" />
+        <span className="font-mono text-[13px]">
+          <span className="font-bold text-ink">{pitcher.pitches ?? total}P</span>
+          <span className="text-ink-3"> · </span>
+          <span className="text-ink-2">{pitcher.ip} IP</span>
+        </span>
+      </div>
+
+      <div className="h-2.5 rounded-sm overflow-hidden flex bg-chip mb-3">
+        {entries.map((e) => (
+          <div key={e.type} style={{ width: `${e.pct}%`, background: pitchColor(e.type) }} />
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-x-5 gap-y-2">
+        {entries.map((e) => (
+          <div key={e.type} className="flex items-center gap-2.5">
+            <span
+              className="w-2 h-2 rounded-full shrink-0"
+              style={{ background: pitchColor(e.type) }}
+            />
+            <span className="font-mono text-[12px] font-bold text-ink-2 w-6">{e.type}</span>
+            <span className="font-ui text-[13px] text-ink flex-1">
+              {PITCH_TYPE_NAMES[e.type] ?? e.type}
+            </span>
+            <span className="font-mono text-[13px] font-bold text-ink">{e.pct}%</span>
+            <span className="font-mono text-[12px] text-ink-3 w-7 text-right">({e.count})</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

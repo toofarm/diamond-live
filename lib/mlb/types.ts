@@ -62,6 +62,12 @@ export interface BoxLineupRow {
   avg?: string;
 }
 
+export interface PitchUsageEntry {
+  /** Pitch type code, e.g. 'FF', 'SL', 'CH'. */
+  type: string;
+  count: number;
+}
+
 export interface BoxPitchingRow {
   id: number;
   name: string;
@@ -69,6 +75,10 @@ export interface BoxPitchingRow {
   h: number; r: number; er: number; bb: number; k: number; hr: number;
   era?: string;
   pitches?: number;
+  /** Counts by pitch type for this pitcher in the current game. */
+  pitchUsage?: PitchUsageEntry[];
+  /** True when this pitcher is the most recent / currently-active arm for the team. */
+  live?: boolean;
 }
 
 export interface WinProbability {
