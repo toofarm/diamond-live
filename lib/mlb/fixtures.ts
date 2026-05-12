@@ -1,0 +1,155 @@
+import type { GameDetailData } from "./types";
+
+/**
+ * Hand-built live-game fixture so the UI can be exercised when no real games
+ * are in progress. Served from /api/mlb/game/[gamePk] when gamePk === 1.
+ */
+export const FIXTURE_LIVE_GAME: GameDetailData = {
+  summary: {
+    id: 1,
+    away: "NYM",
+    home: "PHI",
+    awayScore: 4,
+    homeScore: 2,
+    status: "LIVE",
+    statusDetail: "In Progress",
+    dateISO: "2026-05-12",
+    inning: 7,
+    inningHalf: "TOP",
+    bases: [true, false, true],
+    outs: 1,
+    balls: 2,
+    strikes: 1,
+    venue: "Citizens Bank Park",
+    weather: "Clear, 71°F, Wind 6 mph Out To CF",
+  },
+  linescore: {
+    innings: [
+      { away: 0, home: 0 },
+      { away: 2, home: 0 },
+      { away: 0, home: 0 },
+      { away: 0, home: 2 },
+      { away: 1, home: 0 },
+      { away: 1, home: 0 },
+      { away: null, home: null },
+      { away: null, home: null },
+      { away: null, home: null },
+    ],
+    totals: {
+      away: { r: 4, h: 8, e: 0 },
+      home: { r: 2, h: 7, e: 1 },
+    },
+  },
+  awayLineup: [
+    { id: 624413, name: "B. Nimmo",    pos: "LF", ab: 3, r: 1, h: 2, rbi: 1, bb: 1, k: 0, avg: ".278" },
+    { id: 596019, name: "F. Lindor",   pos: "SS", ab: 4, r: 1, h: 1, rbi: 0, bb: 0, k: 1, avg: ".261" },
+    { id: 624415, name: "J. McNeil",   pos: "2B", ab: 4, r: 0, h: 1, rbi: 0, bb: 0, k: 1, avg: ".253" },
+    { id: 660271, name: "P. Alonso",   pos: "1B", ab: 3, r: 1, h: 1, rbi: 2, bb: 1, k: 1, avg: ".242" },
+    { id: 645277, name: "M. Vientos",  pos: "3B", ab: 3, r: 0, h: 1, rbi: 1, bb: 0, k: 0, avg: ".265" },
+    { id: 670541, name: "S. Marte",    pos: "RF", ab: 4, r: 1, h: 1, rbi: 0, bb: 0, k: 2, avg: ".248" },
+    { id: 663630, name: "B. Baty",     pos: "DH", ab: 3, r: 0, h: 1, rbi: 0, bb: 0, k: 1, avg: ".231" },
+    { id: 668939, name: "L. Acuña",    pos: "CF", ab: 3, r: 0, h: 0, rbi: 0, bb: 0, k: 1, avg: ".221" },
+    { id: 642708, name: "F. Alvarez",  pos: "C",  ab: 3, r: 0, h: 0, rbi: 0, bb: 0, k: 1, avg: ".236" },
+  ],
+  homeLineup: [
+    { id: 547180, name: "B. Harper",    pos: "1B", ab: 3, r: 1, h: 1, rbi: 0, bb: 1, k: 1, avg: ".291" },
+    { id: 656941, name: "T. Turner",    pos: "SS", ab: 4, r: 0, h: 2, rbi: 1, bb: 0, k: 0, avg: ".286" },
+    { id: 624641, name: "K. Schwarber", pos: "DH", ab: 3, r: 1, h: 1, rbi: 1, bb: 1, k: 1, avg: ".226" },
+    { id: 605204, name: "N. Castellanos", pos: "RF", ab: 4, r: 0, h: 1, rbi: 0, bb: 0, k: 2, avg: ".252" },
+    { id: 547989, name: "J. T. Realmuto", pos: "C",  ab: 4, r: 0, h: 1, rbi: 0, bb: 0, k: 1, avg: ".248" },
+    { id: 595777, name: "A. Bohm",      pos: "3B", ab: 3, r: 0, h: 1, rbi: 0, bb: 0, k: 0, avg: ".268" },
+    { id: 670042, name: "B. Marsh",     pos: "LF", ab: 3, r: 0, h: 0, rbi: 0, bb: 0, k: 1, avg: ".239" },
+    { id: 502671, name: "B. Stott",     pos: "2B", ab: 3, r: 0, h: 0, rbi: 0, bb: 0, k: 0, avg: ".245" },
+    { id: 656555, name: "J. Rojas",     pos: "CF", ab: 3, r: 0, h: 0, rbi: 0, bb: 0, k: 1, avg: ".208" },
+  ],
+  awayPitching: [
+    { id: 605135, name: "K. Senga",   ip: "6.0", h: 5, r: 2, er: 2, bb: 2, k: 7, hr: 0, era: "3.18", pitches: 94 },
+    { id: 624133, name: "R. Garrett", ip: "0.1", h: 1, r: 0, er: 0, bb: 0, k: 1, hr: 0, era: "2.74", pitches: 8 },
+  ],
+  homePitching: [
+    { id: 642547, name: "A. Nola",    ip: "5.2", h: 6, r: 3, er: 3, bb: 2, k: 6, hr: 0, era: "4.02", pitches: 92 },
+    { id: 669373, name: "J. Strahm",  ip: "1.0", h: 2, r: 1, er: 1, bb: 0, k: 1, hr: 0, era: "2.81", pitches: 18 },
+  ],
+  plays: [
+    {
+      half: "TOP 7",
+      desc: "Pete Alonso doubles (12) on a sharp ground ball to left field. Brandon Nimmo scores. Francisco Lindor to 3rd.",
+      score: "4-2",
+      tag: "2B",
+      pitchSeq: [
+        { n: 1, type: "FF", velo: 93.4, result: "Ball" },
+        { n: 2, type: "SL", velo: 84.1, result: "Strike" },
+        { n: 3, type: "FF", velo: 94.0, result: "Foul" },
+        { n: 4, type: "CH", velo: 86.7, result: "In play, run(s)" },
+      ],
+    },
+    {
+      half: "TOP 7",
+      desc: "Francisco Lindor singles on a line drive to right field.",
+      tag: "1B",
+      pitchSeq: [
+        { n: 1, type: "SI", velo: 92.8, result: "Ball" },
+        { n: 2, type: "FF", velo: 93.6, result: "In play, no out" },
+      ],
+    },
+    {
+      half: "BOT 6",
+      desc: "Bryce Harper grounds out, second baseman Jeff McNeil to first baseman Pete Alonso.",
+    },
+    {
+      half: "BOT 6",
+      desc: "Trea Turner strikes out swinging.",
+      tag: "K",
+    },
+    {
+      half: "TOP 6",
+      desc: "Brandon Nimmo homers (8) on a fly ball to right-center field.",
+      score: "3-2",
+      tag: "HR",
+      pitchSeq: [
+        { n: 1, type: "FF", velo: 94.3, result: "Strike" },
+        { n: 2, type: "CB", velo: 78.2, result: "Ball" },
+        { n: 3, type: "FF", velo: 94.6, result: "In play, run(s)" },
+      ],
+    },
+    {
+      half: "BOT 4",
+      desc: "Kyle Schwarber homers (11) on a fly ball to right field. Bryce Harper scores.",
+      score: "2-2",
+      tag: "HR",
+    },
+  ],
+  atBat: {
+    inningLabel: "TOP 7 · 1 OUT",
+    pitcher: {
+      id: 669373,
+      name: "Jose Alvarado",
+      firstName: "Jose",
+      lastName: "Alvarado",
+      team: "PHI",
+      hand: "L",
+      pitchCountGame: 14,
+      today: { ip: "0.1", h: 1, r: 1, er: 1, bb: 1, k: 0 },
+    },
+    batter: {
+      id: 645277,
+      name: "Mark Vientos",
+      firstName: "Mark",
+      lastName: "Vientos",
+      team: "NYM",
+      hand: "R",
+      today: { line: "1-3, RBI", events: ["RBI Single", "Groundout", "Strikeout"] },
+      seasonAvg: ".265",
+      seasonHr: 9,
+    },
+    count: { b: 2, s: 1 },
+    outs: 1,
+    bases: [true, false, true],
+    pitches: [
+      { n: 1, type: "FF", velo: 98.4, x: -0.6, y:  0.5, result: "ball",   label: "Ball, outside" },
+      { n: 2, type: "SI", velo: 97.9, x:  0.2, y: -0.2, result: "strike", label: "Called strike" },
+      { n: 3, type: "FF", velo: 98.7, x:  0.9, y:  0.8, result: "ball",   label: "Ball, high" },
+    ],
+  },
+  winProbability: { away: 68, home: 32 },
+};
