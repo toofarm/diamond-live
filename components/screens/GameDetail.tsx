@@ -2,7 +2,18 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useApi } from "@/lib/mlb/client";
-import type { AtBat, BoxLineupRow, BoxPitchingRow, GameDetailData, Pitch, Play, WinProbability } from "@/lib/mlb/types";
+import type {
+  AtBat,
+  BatterSpray,
+  BoxLineupRow,
+  BoxPitchingRow,
+  GameDetailData,
+  Pitch,
+  Play,
+  SprayOutcome,
+  SprayPoint,
+  WinProbability,
+} from "@/lib/mlb/types";
 import { TEAMS } from "@/lib/mlb/teams";
 import { BackChevron, TeamBadge, BaseDiamond, Loader, OutDots } from "@/components/ui/primitives";
 import { DEFAULT_PREFS, useUser, type BoxScoreUnits } from "@/lib/storage";
@@ -16,7 +27,15 @@ function formatVelo(mph: number, units: BoxScoreUnits): { value: string; label: 
   return { value: mph > 0 ? mph.toFixed(1) : "—", label: "MPH" };
 }
 
-type SubTab = "summary" | "box" | "plays" | "pitches";
+type SubTab = "summary" | "box" | "plays" | "pitches" | "spray";
+
+const SPRAY_COLORS: Record<SprayOutcome, string> = {
+  HR: "#C73E1D",
+  "3B": "#D97C2A",
+  "2B": "#2E9D5B",
+  "1B": "#4A4137",
+  OUT: "#B8AFA1",
+};
 
 const PITCH_RESULT_COLORS: Record<Pitch["result"], { fill: string; ink: string; label: string }> = {
   ball: { fill: "#1F8F4F", ink: "#fff", label: "Ball" },
@@ -74,9 +93,13 @@ export function GameDetail({
 
   const user = useUser();
   const prefs = user?.prefs ?? DEFAULT_PREFS;
-  const subTabs = (prefs.pitchByPitch
-    ? ["summary", "box", "plays", "pitches"]
-    : ["summary", "box", "plays"]) as SubTab[];
+  const subTabs = ([
+    "summary",
+    "box",
+    "plays",
+    ...(prefs.pitchByPitch ? ["pitches"] : []),
+    "spray",
+  ] as SubTab[]);
 
   const game = data?.summary;
   const isLive = game?.status === "LIVE";
@@ -237,6 +260,9 @@ export function GameDetail({
           {tab === "box" && <BoxTab data={data} onPlayer={onPlayer} />}
           {tab === "plays" && <PlaysTab plays={data.plays} />}
           {tab === "pitches" && <PitchesTab data={data} units={prefs.boxScoreUnits} />}
+          {tab === "spray" && (
+            <SprayTab spray={data.spray} currentBatterId={data.atBat?.batter.id} />
+          )}
         </div>
       )}
     </div>
@@ -909,6 +935,200 @@ function PitcherUsage({ pitcher }: { pitcher: BoxPitchingRow }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/* ── Spray tab ────────────────────────────────────────────────── */
+
+function SprayTab({
+  spray,
+  currentBatterId,
+}: {
+  spray: BatterSpray[];
+  currentBatterId?: number;
+}) {
+  const populated = spray.filter((s) => s.points.length > 0);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+
+  if (populated.length === 0) {
+    return <div className="p-6 text-ink-3 text-center">No batted-ball data yet.</div>;
+  }
+
+  // Resolve the visible batter: explicit user pick → current batter (if they
+  // have spray data this game) → most-recent batter (spray[0], because the
+  // transform sorts by recency desc).
+  const inSpray = (id: number | undefined) => id != null && populated.some((s) => s.batterId === id);
+  const effectiveId =
+    (selectedId != null && inSpray(selectedId) ? selectedId : null) ??
+    (inSpray(currentBatterId) ? (currentBatterId as number) : null) ??
+    populated[0].batterId;
+
+  const selected = populated.find((s) => s.batterId === effectiveId) ?? populated[0];
+
+  return (
+    <div className="flex flex-col gap-3">
+      <BatterPicker
+        batters={populated}
+        selectedId={effectiveId}
+        currentBatterId={currentBatterId}
+        onSelect={setSelectedId}
+      />
+      <SprayCard spray={selected} />
+    </div>
+  );
+}
+
+function BatterPicker({
+  batters,
+  selectedId,
+  currentBatterId,
+  onSelect,
+}: {
+  batters: BatterSpray[];
+  selectedId: number;
+  currentBatterId?: number;
+  onSelect: (id: number) => void;
+}) {
+  // Group by team abbr, preserving the (recency-sorted) order within each group.
+  const byTeam = new Map<string, BatterSpray[]>();
+  for (const b of batters) {
+    const list = byTeam.get(b.team) ?? [];
+    list.push(b);
+    byTeam.set(b.team, list);
+  }
+
+  return (
+    <label className="relative block w-full">
+      <span className="sr-only">Choose batter</span>
+      <select
+        value={String(selectedId)}
+        onChange={(e) => onSelect(Number(e.target.value))}
+        className="w-full appearance-none cursor-pointer bg-surface border border-line rounded-xl pl-3.5 pr-9 py-2.5 font-head text-[14px] font-semibold text-ink tracking-[-0.2px] focus:outline-none focus:border-accent"
+      >
+        {[...byTeam.entries()].map(([team, list]) => (
+          <optgroup key={team} label={team}>
+            {list.map((b) => (
+              <option key={b.batterId} value={String(b.batterId)}>
+                {b.batterId === currentBatterId ? "● " : ""}
+                {b.lastName} ({b.points.length})
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+      <span
+        aria-hidden="true"
+        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-ink-3 text-[11px] pointer-events-none font-mono"
+      >
+        ▾
+      </span>
+    </label>
+  );
+}
+
+function SprayCard({ spray }: { spray: BatterSpray }) {
+  const n = spray.points.length;
+  return (
+    <div className="bg-surface border border-line rounded-[14px] p-3.5">
+      <div className="mb-2.5">
+        <div className="font-head text-[18px] font-bold text-ink tracking-[-0.3px]">
+          {spray.lastName} · Spray Chart
+        </div>
+        <div className="text-[12px] text-ink-2 mt-0.5">
+          {n === 1 ? "1 batted ball" : `${n} batted balls`} · all outcomes
+        </div>
+      </div>
+      <SprayField points={spray.points} />
+      <SprayLegend />
+    </div>
+  );
+}
+
+/** Diamond + outfield wall + batted-ball dots, drawn in MLB's 0–250 hitData
+ *  coordinate space (home plate ≈ (125, 205), y decreases toward the outfield). */
+function SprayField({ points }: { points: SprayPoint[] }) {
+  const HOME_X = 125;
+  const HOME_Y = 205;
+  const wallR = 175;
+  const innerR = 110;
+  const k = Math.SQRT1_2; // sin/cos of 45°
+
+  const wallLF = { x: HOME_X - wallR * k, y: HOME_Y - wallR * k };
+  const wallRF = { x: HOME_X + wallR * k, y: HOME_Y - wallR * k };
+  const innerLF = { x: HOME_X - innerR * k, y: HOME_Y - innerR * k };
+  const innerRF = { x: HOME_X + innerR * k, y: HOME_Y - innerR * k };
+
+  // Infield diamond (home → 1B → 2B → 3B), 30-unit edge.
+  const diamond = `${HOME_X},${HOME_Y} ${HOME_X + 30},${HOME_Y - 30} ${HOME_X},${HOME_Y - 60} ${HOME_X - 30},${HOME_Y - 30}`;
+
+  return (
+    <svg viewBox="0 0 250 240" className="w-full h-auto block mb-2.5">
+      {/* Foul lines */}
+      <line x1={HOME_X} y1={HOME_Y} x2={wallLF.x} y2={wallLF.y} stroke="var(--color-ink-3)" strokeWidth="1" />
+      <line x1={HOME_X} y1={HOME_Y} x2={wallRF.x} y2={wallRF.y} stroke="var(--color-ink-3)" strokeWidth="1" />
+
+      {/* Outfield wall arc */}
+      <path
+        d={`M ${wallLF.x} ${wallLF.y} A ${wallR} ${wallR} 0 0 1 ${wallRF.x} ${wallRF.y}`}
+        fill="none"
+        stroke="var(--color-line)"
+        strokeWidth="0.75"
+      />
+
+      {/* Mid-outfield arc */}
+      <path
+        d={`M ${innerLF.x} ${innerLF.y} A ${innerR} ${innerR} 0 0 1 ${innerRF.x} ${innerRF.y}`}
+        fill="none"
+        stroke="var(--color-line-2)"
+        strokeWidth="0.5"
+      />
+
+      {/* Infield diamond */}
+      <polygon
+        points={diamond}
+        fill="var(--color-chip)"
+        stroke="var(--color-line)"
+        strokeWidth="0.75"
+      />
+
+      {/* Home plate marker */}
+      <circle cx={HOME_X} cy={HOME_Y} r="2" fill="var(--color-ink-2)" />
+
+      {/* Field labels */}
+      <text x="38" y="180" fontSize="9" fill="var(--color-ink-3)" fontFamily="var(--font-mono)" letterSpacing="0.5">LF</text>
+      <text x={HOME_X} y="125" fontSize="9" fill="var(--color-ink-3)" textAnchor="middle" fontFamily="var(--font-mono)" letterSpacing="0.5">CF</text>
+      <text x="212" y="180" fontSize="9" fill="var(--color-ink-3)" fontFamily="var(--font-mono)" letterSpacing="0.5">RF</text>
+
+      {/* Batted-ball points */}
+      {points.map((p, i) => (
+        <circle
+          key={i}
+          cx={p.x}
+          cy={p.y}
+          r="4.5"
+          fill={SPRAY_COLORS[p.outcome]}
+          stroke="var(--color-surface)"
+          strokeWidth="1"
+        />
+      ))}
+    </svg>
+  );
+}
+
+function SprayLegend() {
+  const entries: SprayOutcome[] = ["HR", "2B", "1B", "OUT"];
+  return (
+    <div className="flex items-center gap-4 pt-0.5">
+      {entries.map((o) => (
+        <div key={o} className="flex items-center gap-1.5">
+          <span
+            className="w-2 h-2 rounded-full"
+            style={{ background: SPRAY_COLORS[o] }}
+          />
+          <span className="font-mono text-[11px] font-bold text-ink-2 tracking-[0.5px]">{o}</span>
+        </div>
+      ))}
     </div>
   );
 }

@@ -440,6 +440,7 @@ export function mapGameDetail(feed: any, dateISO?: string): GameDetailData {
 
   const atBat = status === "LIVE" ? mapAtBat(feed) : null;
   const winProbability = readWinProbability(live);
+  const spray = computeBatterSprays(allPlays, awayAbbr, homeAbbr, awayId, homeId);
 
   return {
     summary,
@@ -451,7 +452,122 @@ export function mapGameDetail(feed: any, dateISO?: string): GameDetailData {
     plays,
     atBat,
     winProbability,
+    spray,
   };
+}
+
+/**
+ * Bucket an MLB result.event string into our four spray outcome categories.
+ * Anything that left the bat but didn't land for a hit (groundouts, flyouts,
+ * fielder's choice, reach-on-error, sac flies, etc.) lumps into OUT — color
+ * fidelity over taxonomic purity.
+ */
+function classifySprayOutcome(event: string | undefined): import("./types").SprayOutcome | null {
+  if (!event) return null;
+  const e = event.toLowerCase();
+  if (e.includes("home run")) return "HR";
+  if (e.includes("triple")) return "3B";
+  if (e.includes("double") && !e.includes("double play")) return "2B";
+  if (e.includes("single")) return "1B";
+  // Catch-all for in-play results that aren't hits.
+  if (
+    e.includes("out") ||
+    e.includes("groundout") ||
+    e.includes("flyout") ||
+    e.includes("lineout") ||
+    e.includes("popout") ||
+    e.includes("forceout") ||
+    e.includes("pop out") ||
+    e.includes("ground out") ||
+    e.includes("fly out") ||
+    e.includes("line out") ||
+    e.includes("fielders choice") ||
+    e.includes("fielder's choice") ||
+    e.includes("sac fly") ||
+    e.includes("sacrifice") ||
+    e.includes("error") ||
+    e.includes("double play") ||
+    e.includes("triple play")
+  ) {
+    return "OUT";
+  }
+  return null;
+}
+
+/**
+ * Walk allPlays for completed at-bats with a landed ball, group by batter id,
+ * and emit per-batter spray points. The coordinate field on a hitData event
+ * lives in MLB's 0–250 image-coordinate space (home plate ≈ (125, 205)), so
+ * the UI can plot the dots directly against a matching viewBox.
+ */
+function computeBatterSprays(
+  allPlays: any[],
+  awayAbbr: string,
+  homeAbbr: string,
+  awayTeamId: number | undefined,
+  homeTeamId: number | undefined,
+): import("./types").BatterSpray[] {
+  const byBatter = new Map<number, import("./types").BatterSpray>();
+  // Most-recent batter ordering: allPlays is in chronological order, so each
+  // time we touch a batter we bump their order index. Sorting by this index
+  // desc puts the latest hitter at the front of the picker.
+  const lastOrder = new Map<number, number>();
+  let order = 0;
+  for (const p of allPlays) {
+    const event = p?.result?.event as string | undefined;
+    const outcome = classifySprayOutcome(event);
+    if (!outcome) continue;
+    const batterId = p?.matchup?.batter?.id;
+    if (typeof batterId !== "number") continue;
+    // Find the play event carrying the hit-coordinate payload — typically the
+    // final pitch of the AB.
+    const events = (p?.playEvents ?? []) as any[];
+    const hitEv = [...events].reverse().find((ev) => ev?.hitData?.coordinates);
+    const coords = hitEv?.hitData?.coordinates;
+    const x = coords?.coordX;
+    const y = coords?.coordY;
+    if (typeof x !== "number" || typeof y !== "number") continue;
+
+    const battingTeamId = p?.matchup?.batter?.parentTeamId ?? p?.matchup?.batSide?.teamId;
+    const team =
+      battingTeamId === awayTeamId
+        ? awayAbbr
+        : battingTeamId === homeTeamId
+          ? homeAbbr
+          : p?.about?.halfInning === "top"
+            ? awayAbbr
+            : homeAbbr;
+
+    let entry = byBatter.get(batterId);
+    if (!entry) {
+      const fullName = p?.matchup?.batter?.fullName ?? "";
+      const lastName = fullName.split(" ").slice(-1)[0] ?? fullName;
+      entry = {
+        batterId,
+        fullName,
+        lastName,
+        team,
+        points: [],
+      };
+      byBatter.set(batterId, entry);
+    }
+    entry.points.push({
+      x,
+      y,
+      outcome,
+      inning: p?.about?.inning ?? undefined,
+      half: p?.about?.halfInning === "bottom" ? "BOT" : p?.about?.halfInning === "top" ? "TOP" : undefined,
+      event,
+    });
+    order++;
+    lastOrder.set(batterId, order);
+  }
+  // Most-recent batter first; lastName breaks ties (e.g. same play index).
+  return [...byBatter.values()].sort((a, b) => {
+    const ao = lastOrder.get(a.batterId) ?? 0;
+    const bo = lastOrder.get(b.batterId) ?? 0;
+    return bo - ao || a.lastName.localeCompare(b.lastName);
+  });
 }
 
 /**

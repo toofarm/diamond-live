@@ -188,4 +188,70 @@ export const FIXTURE_LIVE_GAME: GameDetailData = {
     ],
   },
   winProbability: { away: 68, home: 32 },
+  spray: [
+    {
+      batterId: 596019,
+      fullName: "Francisco Lindor",
+      lastName: "Lindor",
+      team: "NYM",
+      points: [
+        { x: 95,  y: 55,  outcome: "HR",  inning: 5, half: "TOP", event: "Home Run" },
+        { x: 65,  y: 110, outcome: "2B",  inning: 3, half: "TOP", event: "Double" },
+        { x: 145, y: 130, outcome: "1B",  inning: 7, half: "TOP", event: "Single" },
+        { x: 105, y: 175, outcome: "OUT", inning: 1, half: "TOP", event: "Groundout" },
+      ],
+    },
+    {
+      batterId: 660271,
+      fullName: "Pete Alonso",
+      lastName: "Alonso",
+      team: "NYM",
+      points: [
+        { x: 175, y: 80,  outcome: "HR",  inning: 2, half: "TOP", event: "Home Run" },
+        { x: 55,  y: 125, outcome: "2B",  inning: 7, half: "TOP", event: "Double" },
+        { x: 130, y: 160, outcome: "OUT", inning: 5, half: "TOP", event: "Lineout" },
+      ],
+    },
+    {
+      batterId: 624413,
+      fullName: "Brandon Nimmo",
+      lastName: "Nimmo",
+      team: "NYM",
+      points: [
+        { x: 195, y: 65,  outcome: "HR",  inning: 6, half: "TOP", event: "Home Run" },
+        { x: 80,  y: 145, outcome: "1B",  inning: 4, half: "TOP", event: "Single" },
+        { x: 165, y: 175, outcome: "OUT", inning: 2, half: "TOP", event: "Flyout" },
+      ],
+    },
+    {
+      batterId: 624641,
+      fullName: "Kyle Schwarber",
+      lastName: "Schwarber",
+      team: "PHI",
+      points: [
+        { x: 200, y: 80,  outcome: "HR",  inning: 4, half: "BOT", event: "Home Run" },
+        { x: 110, y: 150, outcome: "OUT", inning: 1, half: "BOT", event: "Flyout" },
+      ],
+    },
+    {
+      batterId: 656941,
+      fullName: "Trea Turner",
+      lastName: "Turner",
+      team: "PHI",
+      points: [
+        { x: 70,  y: 135, outcome: "1B",  inning: 3, half: "BOT", event: "Single" },
+        { x: 155, y: 160, outcome: "1B",  inning: 5, half: "BOT", event: "Single" },
+      ],
+    },
+    {
+      batterId: 547180,
+      fullName: "Bryce Harper",
+      lastName: "Harper",
+      team: "PHI",
+      points: [
+        { x: 175, y: 130, outcome: "2B",  inning: 2, half: "BOT", event: "Double" },
+        { x: 95,  y: 180, outcome: "OUT", inning: 6, half: "BOT", event: "Groundout" },
+      ],
+    },
+  ],
 };

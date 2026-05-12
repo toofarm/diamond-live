@@ -87,6 +87,29 @@ export interface WinProbability {
   home: number;
 }
 
+export type SprayOutcome = "HR" | "3B" | "2B" | "1B" | "OUT";
+
+export interface SprayPoint {
+  /** MLB Stats API hitData coords (0–250 image space, home plate near y≈205). */
+  x: number;
+  y: number;
+  outcome: SprayOutcome;
+  inning?: number;
+  half?: HalfInning;
+  /** e.g. "Single", "Groundout", short result label. */
+  event?: string;
+}
+
+export interface BatterSpray {
+  batterId: number;
+  /** Full name as it appears in the feed, e.g. "Francisco Lindor". */
+  fullName: string;
+  lastName: string;
+  /** Team abbreviation. */
+  team: string;
+  points: SprayPoint[];
+}
+
 export interface GameDetailData {
   summary: GameSummary;
   linescore: Linescore | null;
@@ -97,6 +120,8 @@ export interface GameDetailData {
   plays: Play[];
   atBat: AtBat | null;
   winProbability: WinProbability | null;
+  /** Per-batter batted-ball spray points for the current game. */
+  spray: BatterSpray[];
 }
 
 export interface AtBat {
