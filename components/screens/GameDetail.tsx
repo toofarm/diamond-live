@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useApi } from "@/lib/mlb/client";
-import type { AtBat, BoxLineupRow, BoxPitchingRow, GameDetailData, Pitch, Play } from "@/lib/mlb/types";
+import type { AtBat, BoxLineupRow, BoxPitchingRow, GameDetailData, Pitch, Play, WinProbability } from "@/lib/mlb/types";
 import { TEAMS } from "@/lib/mlb/teams";
 import { BackChevron, TeamBadge, BaseDiamond, Loader, OutDots } from "@/components/ui/primitives";
 import { DEFAULT_PREFS, useUser, type BoxScoreUnits } from "@/lib/storage";
@@ -65,6 +65,31 @@ export function GameDetail({
     setTab("summary");
   }
 
+  // Collapse the hero (team columns + big score) once the user starts scrolling
+  // and fold the team scores into the bases/outs strip below. Only meaningful
+  // for live games — non-live games don't render the bases/outs strip, so we
+  // keep the hero pinned.
+  const [scrolled, setScrolled] = useState(false);
+  const condensed = scrolled && isLive;
+  const [headlineH, setHeadlineH] = useState(0);
+  // Callback ref so the ResizeObserver attaches the moment the hero element
+  // mounts (the `{game && (...)}` block renders only after the API resolves,
+  // so a useEffect with [] deps would fire before the ref is populated).
+  const observerRef = useRef<ResizeObserver | null>(null);
+  const headlineRef = useCallback((el: HTMLDivElement | null) => {
+    observerRef.current?.disconnect();
+    observerRef.current = null;
+    if (!el) return;
+    const measure = () => setHeadlineH(el.offsetHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    observerRef.current = ro;
+  }, []);
+  const onScrollContent = (e: React.UIEvent<HTMLDivElement>) => {
+    setScrolled(e.currentTarget.scrollTop > 75);
+  };
+
   return (
     <div className="absolute inset-0 bg-canvas flex flex-col z-10 overflow-hidden">
       <div className="px-3.5 md:px-6 pb-2.5 bg-surface border-b border-line-2 pt-4">
@@ -89,41 +114,68 @@ export function GameDetail({
 
         {game && (
           <div className="mt-3 px-1">
-            <div className="flex items-center gap-3.5">
-              <TeamColumn abbr={game.away} onTeam={onTeam} />
-              <div className="flex-[1.2] text-center">
-                <div className="font-head text-[42px] font-bold text-ink tracking-[-1.5px] leading-none">
-                  <span>{game.awayScore ?? 0}</span>
-                  <span className="text-ink-3 mx-2">–</span>
-                  <span>{game.homeScore ?? 0}</span>
-                </div>
-                <div
-                  className={`mt-2 text-[11px] font-bold tracking-[1.2px] font-ui uppercase ${isLive ? "text-live" : "text-ink-2"
-                    }`}
-                >
-                  {isLive
-                    ? `${game.inningHalf ?? ""} ${game.inning ?? ""}${ord(game.inning)}`
-                    : game.status === "FINAL"
-                      ? "FINAL"
-                      : game.time ?? game.statusDetail}
+            <div
+              aria-hidden={condensed}
+              className="overflow-hidden transition-[height,opacity] duration-200 ease-out"
+              style={{
+                height: headlineH ? (condensed ? 0 : headlineH) : undefined,
+                opacity: condensed ? 0 : 1,
+              }}
+            >
+              <div ref={headlineRef}>
+                <div className="flex items-center gap-3.5">
+                  <TeamColumn abbr={game.away} onTeam={onTeam} />
+                  <div className="flex-[1.2] text-center">
+                    <div className="font-head text-[42px] font-bold text-ink tracking-[-1.5px] leading-none">
+                      <span>{game.awayScore ?? 0}</span>
+                      <span className="text-ink-3 mx-2">–</span>
+                      <span>{game.homeScore ?? 0}</span>
+                    </div>
+                    <div
+                      className={`mt-2 text-[11px] font-bold tracking-[1.2px] font-ui uppercase ${isLive ? "text-live" : "text-ink-2"
+                        }`}
+                    >
+                      {isLive
+                        ? `${game.inningHalf ?? ""} ${game.inning ?? ""}${ord(game.inning)}`
+                        : game.status === "FINAL"
+                          ? "FINAL"
+                          : game.time ?? game.statusDetail}
+                    </div>
+                  </div>
+                  <TeamColumn abbr={game.home} onTeam={onTeam} />
                 </div>
               </div>
-              <TeamColumn abbr={game.home} onTeam={onTeam} />
             </div>
 
             {isLive && (
-              <div className="mt-3.5 flex items-center justify-center gap-[18px] py-2 border-t border-line-2">
-                <BaseDiamond bases={game.bases ?? [false, false, false]} size={32} />
-                <div className="font-mono text-[13px] text-ink">
-                  <span className="font-semibold">
-                    {game.balls ?? 0}-{game.strikes ?? 0}
-                  </span>
-                  <span className="text-ink-3 text-[9px] ml-1">B-K</span>
+              <div className="mt-3.5 flex items-center py-2 border-t border-line-2">
+                <ScoreChip
+                  side="away"
+                  abbr={game.away}
+                  score={game.awayScore ?? 0}
+                  visible={condensed}
+                />
+
+                <div className="flex-1 flex items-center justify-center gap-[18px]">
+                  <BaseDiamond bases={game.bases ?? [false, false, false]} size={32} />
+                  <div className="font-mono text-[13px] text-ink">
+                    <span className="font-semibold">
+                      {game.balls ?? 0}-{game.strikes ?? 0}
+                    </span>
+                    <span className="text-ink-3 text-[9px] ml-1">B-K</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <OutDots outs={game.outs ?? 0} />
+                    <span className="text-[10px] text-ink-3 font-mono">OUTS</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <OutDots outs={game.outs ?? 0} />
-                  <span className="text-[10px] text-ink-3 font-mono">OUTS</span>
-                </div>
+
+                <ScoreChip
+                  side="home"
+                  abbr={game.home}
+                  score={game.homeScore ?? 0}
+                  visible={condensed}
+                />
               </div>
             )}
           </div>
@@ -149,13 +201,54 @@ export function GameDetail({
       </div>
 
       {data && (
-        <div className="flex-1 overflow-y-auto px-3.5 md:px-6 pt-3.5 pb-20 w-full max-w-275 mx-auto">
-          {tab === "summary" && <SummaryTab data={data} onPlayer={onPlayer} units={prefs.boxScoreUnits} />}
+        <div
+          onScroll={onScrollContent}
+          className="flex-1 overflow-y-auto px-3.5 md:px-6 pt-3.5 pb-20 w-full max-w-275 mx-auto"
+        >
+          {tab === "summary" && (
+            <SummaryTab
+              data={data}
+              onPlayer={onPlayer}
+              units={prefs.boxScoreUnits}
+              showWinProbability={prefs.winProbability}
+            />
+          )}
           {tab === "box" && <BoxTab data={data} onPlayer={onPlayer} />}
           {tab === "plays" && <PlaysTab plays={data.plays} />}
           {tab === "pitches" && <PitchesTab data={data} units={prefs.boxScoreUnits} />}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Compact team + score that lives in the game-state strip when the hero is
+ * collapsed. Animates in/out via `max-width` + `opacity` so it never affects
+ * the centered bases/B-K/outs cluster when invisible.
+ */
+function ScoreChip({
+  side,
+  abbr,
+  score,
+  visible,
+}: {
+  side: "away" | "home";
+  abbr: string;
+  score: number;
+  visible: boolean;
+}) {
+  const order = side === "away" ? "" : "flex-row-reverse";
+  return (
+    <div
+      aria-hidden={!visible}
+      className={`flex items-center gap-2 overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 ease-out ${order} ${visible ? "max-w-[120px] opacity-100" : "max-w-0 opacity-0"
+        }`}
+    >
+      <TeamBadge abbr={abbr} size={22} />
+      <span className="font-head text-[18px] font-bold text-ink tracking-[-0.4px] leading-none">
+        {score}
+      </span>
     </div>
   );
 }
@@ -177,8 +270,18 @@ function TeamColumn({ abbr, onTeam }: { abbr: string; onTeam: (abbr: string) => 
 
 /* ── Summary tab ──────────────────────────────────────────────── */
 
-function SummaryTab({ data, onPlayer, units }: { data: GameDetailData; onPlayer: (id: number) => void; units: BoxScoreUnits }) {
-  const { summary, linescore, plays, atBat } = data;
+function SummaryTab({
+  data,
+  onPlayer,
+  units,
+  showWinProbability,
+}: {
+  data: GameDetailData;
+  onPlayer: (id: number) => void;
+  units: BoxScoreUnits;
+  showWinProbability: boolean;
+}) {
+  const { summary, linescore, plays, atBat, winProbability } = data;
   return (
     <div className="flex flex-col gap-3.5">
       {atBat && <AtBatCard ab={atBat} onPlayer={onPlayer} units={units} />}
@@ -231,6 +334,14 @@ function SummaryTab({ data, onPlayer, units }: { data: GameDetailData; onPlayer:
         </div>
       )}
 
+      {showWinProbability && winProbability && (
+        <WinProbabilityCard
+          away={summary.away}
+          home={summary.home}
+          probs={winProbability}
+        />
+      )}
+
       <div className="bg-surface border border-line rounded-[14px] p-3.5">
         <div className="text-[10px] tracking-[1.2px] uppercase text-ink-3 font-bold mb-2.5">
           Recent
@@ -267,6 +378,44 @@ function SummaryTab({ data, onPlayer, units }: { data: GameDetailData; onPlayer:
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ── Win Probability card ─────────────────────────────────────── */
+
+function WinProbabilityCard({
+  away,
+  home,
+  probs,
+}: {
+  away: string;
+  home: string;
+  probs: WinProbability;
+}) {
+  const awayPct = Math.round(probs.away);
+  const homePct = 100 - awayPct;
+  const awayColor = TEAMS[away]?.primary ?? "var(--color-accent)";
+  const homeColor = TEAMS[home]?.primary ?? "var(--color-ink-2)";
+
+  return (
+    <div className="bg-surface border border-line rounded-[14px] p-3.5">
+      <div className="text-[10px] tracking-[1.2px] uppercase text-ink-3 font-bold mb-3">
+        Win Probability
+      </div>
+      <div className="flex items-center gap-2.5">
+        <TeamBadge abbr={away} size={28} />
+        <div className="flex-1 h-3.5 rounded-full overflow-hidden flex bg-chip">
+          <div style={{ width: `${awayPct}%`, background: awayColor }} />
+          <div style={{ width: `${homePct}%`, background: homeColor }} />
+        </div>
+        <TeamBadge abbr={home} size={28} />
+      </div>
+      <div className="mt-2 flex items-center font-mono text-[15px] font-bold text-ink tracking-[-0.3px]">
+        <span>{awayPct}%</span>
+        <div className="flex-1" />
+        <span>{homePct}%</span>
+      </div>
     </div>
   );
 }

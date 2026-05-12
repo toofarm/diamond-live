@@ -437,6 +437,7 @@ export function mapGameDetail(feed: any, dateISO?: string): GameDetailData {
   const homePitching = mapBoxPitching(box?.teams?.home);
 
   const atBat = status === "LIVE" ? mapAtBat(feed) : null;
+  const winProbability = readWinProbability(live);
 
   return {
     summary,
@@ -447,7 +448,27 @@ export function mapGameDetail(feed: any, dateISO?: string): GameDetailData {
     homePitching,
     plays,
     atBat,
+    winProbability,
   };
+}
+
+/**
+ * Pull the most recent home/away win probability from the live feed.
+ * MLB exposes per-play `homeWinProbability` (0–100); we scan from the end of
+ * allPlays for the latest play that has it set. Returns null if unavailable
+ * (pregame, no data, or final games where the field is absent).
+ */
+function readWinProbability(live: any): { home: number; away: number } | null {
+  const all = (live?.plays?.allPlays ?? []) as any[];
+  for (let i = all.length - 1; i >= 0; i--) {
+    const p = all[i];
+    const home = p?.homeWinProbability;
+    if (typeof home === "number" && Number.isFinite(home)) {
+      const h = Math.max(0, Math.min(100, home));
+      return { home: h, away: 100 - h };
+    }
+  }
+  return null;
 }
 
 /* ── Leaders ─────────────────────────────────────────────────────────────── */

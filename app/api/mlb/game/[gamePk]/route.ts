@@ -1,5 +1,6 @@
 import { mapGameDetail } from "@/lib/mlb/transform";
 import { CACHE_HEADERS } from "@/lib/mlb/cacheHeaders";
+import { FIXTURE_LIVE_GAME } from "@/lib/mlb/fixtures";
 
 /**
  * GET /api/mlb/game/[gamePk]
@@ -14,6 +15,12 @@ export async function GET(_: Request, { params }: { params: Promise<{ gamePk: st
   const id = Number(gamePk);
   if (!Number.isFinite(id) || id <= 0) {
     return Response.json({ error: "Invalid gamePk" }, { status: 400 });
+  }
+
+  // Dev fixture: /game/1 serves a hand-built live game so the UI can be
+  // exercised when no real games are in progress.
+  if (id === 1) {
+    return Response.json(FIXTURE_LIVE_GAME, { headers: CACHE_HEADERS.LIVE });
   }
 
   const url = `https://statsapi.mlb.com/api/v1.1/game/${id}/feed/live`;

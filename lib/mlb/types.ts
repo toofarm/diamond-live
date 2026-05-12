@@ -71,6 +71,12 @@ export interface BoxPitchingRow {
   pitches?: number;
 }
 
+export interface WinProbability {
+  /** 0–100, sums to 100 with home. */
+  away: number;
+  home: number;
+}
+
 export interface GameDetailData {
   summary: GameSummary;
   linescore: Linescore | null;
@@ -80,6 +86,7 @@ export interface GameDetailData {
   homePitching: BoxPitchingRow[];
   plays: Play[];
   atBat: AtBat | null;
+  winProbability: WinProbability | null;
 }
 
 export interface AtBat {
