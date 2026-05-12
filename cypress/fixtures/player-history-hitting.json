@@ -1,0 +1,24 @@
+{
+  "mode": "hitting",
+  "years": [
+    { "year": 2026, "team": "NYM", "g": 38,  "ab": 154,  "hr": 8,   "rbi": 27,  "avg": ".318", "ops": ".974" },
+    { "year": 2025, "team": "NYM", "g": 160, "ab": 612,  "hr": 33,  "rbi": 91,  "avg": ".272", "ops": ".844" },
+    { "year": 2024, "team": "NYM", "g": 152, "ab": 596,  "hr": 29,  "rbi": 88,  "avg": ".264", "ops": ".824" },
+    { "year": 2023, "team": "NYM", "g": 160, "ab": 605,  "hr": 31,  "rbi": 98,  "avg": ".254", "ops": ".806" },
+    { "year": 2022, "team": "NYM", "g": 161, "ab": 632,  "hr": 26,  "rbi": 107, "avg": ".270", "ops": ".788" }
+  ],
+  "career": {
+    "g": 1421,
+    "seasons": 11,
+    "yearRange": "2015–2026",
+    "ab": 5380,
+    "hr": 226,
+    "rbi": 760,
+    "avg": ".272",
+    "ops": ".812"
+  },
+  "highlights": [
+    { "name": "All-Star",   "count": 5, "mostRecentYear": 2025 },
+    { "name": "Gold Glove", "count": 2, "mostRecentYear": 2025 }
+  ]
+}

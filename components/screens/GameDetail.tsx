@@ -1,11 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useApi } from "@/lib/mlb/client";
-import type { AtBat, BoxLineupRow, BoxPitchingRow, GameDetailData, Pitch, Play } from "@/lib/mlb/types";
+import type {
+  AtBat,
+  BatterSpray,
+  BoxLineupRow,
+  BoxPitchingRow,
+  GameDetailData,
+  Pitch,
+  Play,
+  SprayOutcome,
+  SprayPoint,
+  WinProbability,
+} from "@/lib/mlb/types";
 import { TEAMS } from "@/lib/mlb/teams";
 import { BackChevron, TeamBadge, BaseDiamond, Loader, OutDots } from "@/components/ui/primitives";
 import { DEFAULT_PREFS, useUser, type BoxScoreUnits } from "@/lib/storage";
+import { formatLocalTime } from "@/lib/date";
 
 /** Format pitch velocity in the user's preferred units. Returns the value + label. */
 function formatVelo(mph: number, units: BoxScoreUnits): { value: string; label: string } {
@@ -16,7 +28,15 @@ function formatVelo(mph: number, units: BoxScoreUnits): { value: string; label: 
   return { value: mph > 0 ? mph.toFixed(1) : "—", label: "MPH" };
 }
 
-type SubTab = "summary" | "box" | "plays" | "pitches";
+type SubTab = "summary" | "box" | "plays" | "pitches" | "spray";
+
+const SPRAY_COLORS: Record<SprayOutcome, string> = {
+  HR: "#C73E1D",
+  "3B": "#D97C2A",
+  "2B": "#2E9D5B",
+  "1B": "#4A4137",
+  OUT: "#B8AFA1",
+};
 
 const PITCH_RESULT_COLORS: Record<Pitch["result"], { fill: string; ink: string; label: string }> = {
   ball: { fill: "#1F8F4F", ink: "#fff", label: "Ball" },
@@ -26,11 +46,32 @@ const PITCH_RESULT_COLORS: Record<Pitch["result"], { fill: string; ink: string; 
 };
 
 const PITCH_TYPE_NAMES: Record<string, string> = {
-  FF: "4-Seam", SI: "Sinker", SL: "Slider",
-  CB: "Curve", CU: "Curve", CH: "Change",
+  FF: "4-Seam", FT: "2-Seam", SI: "Sinker", SL: "Slider",
+  CB: "Curve", CU: "Curve", CH: "Changeup",
   CT: "Cutter", FC: "Cutter", FS: "Splitter",
   KC: "Knuckle", EP: "Eephus", FO: "Forkball",
 };
+
+/** Color per pitch type, used in the pitch-usage card on the Pitches tab. */
+const PITCH_USAGE_COLORS: Record<string, string> = {
+  FF: "#B83A2A", // 4-Seam — rust red
+  FT: "#B83A2A", // 2-Seam
+  SI: "#D97C2A", // Sinker — orange
+  SL: "#2F6BD9", // Slider — cobalt
+  FS: "#5DA3DA", // Splitter — sky blue
+  CT: "#B95A92", // Cutter — magenta
+  FC: "#B95A92",
+  CB: "#5B3DAA", // Curve — purple
+  CU: "#5B3DAA",
+  KC: "#5B3DAA",
+  CH: "#2E9D5B", // Changeup — green
+  EP: "#8A8077",
+  FO: "#8A8077",
+};
+
+function pitchColor(code: string): string {
+  return PITCH_USAGE_COLORS[code] ?? "#8A8077";
+}
 
 function ord(n?: number) {
   if (!n) return "";
@@ -53,9 +94,13 @@ export function GameDetail({
 
   const user = useUser();
   const prefs = user?.prefs ?? DEFAULT_PREFS;
-  const subTabs = (prefs.pitchByPitch
-    ? ["summary", "box", "plays", "pitches"]
-    : ["summary", "box", "plays"]) as SubTab[];
+  const subTabs = ([
+    "summary",
+    "box",
+    "plays",
+    ...(prefs.pitchByPitch ? ["pitches"] : []),
+    "spray",
+  ] as SubTab[]);
 
   const game = data?.summary;
   const isLive = game?.status === "LIVE";
@@ -65,21 +110,48 @@ export function GameDetail({
     setTab("summary");
   }
 
+  // Collapse the hero (team columns + big score) once the user starts scrolling
+  // and fold the team scores into the bases/outs strip below. Only meaningful
+  // for live games — non-live games don't render the bases/outs strip, so we
+  // keep the hero pinned.
+  const [scrolled, setScrolled] = useState(false);
+  const condensed = scrolled && isLive;
+  const [headlineH, setHeadlineH] = useState(0);
+  // Callback ref so the ResizeObserver attaches the moment the hero element
+  // mounts (the `{game && (...)}` block renders only after the API resolves,
+  // so a useEffect with [] deps would fire before the ref is populated).
+  const observerRef = useRef<ResizeObserver | null>(null);
+  const headlineRef = useCallback((el: HTMLDivElement | null) => {
+    observerRef.current?.disconnect();
+    observerRef.current = null;
+    if (!el) return;
+    const measure = () => setHeadlineH(el.offsetHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    observerRef.current = ro;
+  }, []);
+  const onScrollContent = (e: React.UIEvent<HTMLDivElement>) => {
+    setScrolled(e.currentTarget.scrollTop > 15);
+  };
+
   return (
-    <div className="absolute inset-0 bg-canvas flex flex-col z-10 overflow-hidden">
+    <div data-cy="game-detail" className="absolute inset-0 bg-canvas flex flex-col z-10 overflow-hidden">
       <div className="px-3.5 md:px-6 pb-2.5 bg-surface border-b border-line-2 pt-4">
         <div className="flex items-center">
           <BackChevron onClick={onBack} label="Scores" />
           <div className="flex-1" />
           {isLive && (
             <span
-              className="text-[10px] font-bold text-live tracking-widest px-2 py-0.5 rounded-full"
+              data-cy="live-pill"
+              className="inline-flex items-center gap-1.5 text-[10px] font-bold text-live tracking-widest px-2 py-0.5 rounded-full"
               style={{
                 background: "color-mix(in srgb, var(--color-live) 12%, transparent)",
                 border: "1px solid color-mix(in srgb, var(--color-live) 40%, transparent)",
               }}
             >
-              ● LIVE
+              <span className="w-1.5 h-1.5 rounded-full bg-live dl-live-pulse" />
+              LIVE
             </span>
           )}
         </div>
@@ -89,41 +161,69 @@ export function GameDetail({
 
         {game && (
           <div className="mt-3 px-1">
-            <div className="flex items-center gap-3.5">
-              <TeamColumn abbr={game.away} onTeam={onTeam} />
-              <div className="flex-[1.2] text-center">
-                <div className="font-head text-[42px] font-bold text-ink tracking-[-1.5px] leading-none">
-                  <span>{game.awayScore ?? 0}</span>
-                  <span className="text-ink-3 mx-2">–</span>
-                  <span>{game.homeScore ?? 0}</span>
-                </div>
-                <div
-                  className={`mt-2 text-[11px] font-bold tracking-[1.2px] font-ui uppercase ${isLive ? "text-live" : "text-ink-2"
-                    }`}
-                >
-                  {isLive
-                    ? `${game.inningHalf ?? ""} ${game.inning ?? ""}${ord(game.inning)}`
-                    : game.status === "FINAL"
-                      ? "FINAL"
-                      : game.time ?? game.statusDetail}
+            <div
+              data-cy="hero-headline"
+              aria-hidden={condensed}
+              className="overflow-hidden transition-[height,opacity] duration-200 ease-out"
+              style={{
+                height: headlineH ? (condensed ? 0 : headlineH) : undefined,
+                opacity: condensed ? 0 : 1,
+              }}
+            >
+              <div ref={headlineRef}>
+                <div className="flex items-center gap-3.5">
+                  <TeamColumn abbr={game.away} onTeam={onTeam} />
+                  <div className="flex-[1.2] text-center">
+                    <div className="font-head text-[42px] font-bold text-ink tracking-[-1.5px] leading-none">
+                      <span>{game.awayScore ?? 0}</span>
+                      <span className="text-ink-3 mx-2">–</span>
+                      <span>{game.homeScore ?? 0}</span>
+                    </div>
+                    <div
+                      className={`mt-2 text-[11px] font-bold tracking-[1.2px] font-ui uppercase ${isLive ? "text-live" : "text-ink-2"
+                        }`}
+                    >
+                      {isLive
+                        ? `${game.inningHalf ?? ""} ${game.inning ?? ""}${ord(game.inning)}`
+                        : game.status === "FINAL"
+                          ? "FINAL"
+                          : formatLocalTime(game.time) ?? game.statusDetail}
+                    </div>
+                  </div>
+                  <TeamColumn abbr={game.home} onTeam={onTeam} />
                 </div>
               </div>
-              <TeamColumn abbr={game.home} onTeam={onTeam} />
             </div>
 
             {isLive && (
-              <div className="mt-3.5 flex items-center justify-center gap-[18px] py-2 border-t border-line-2">
-                <BaseDiamond bases={game.bases ?? [false, false, false]} size={32} />
-                <div className="font-mono text-[13px] text-ink">
-                  <span className="font-semibold">
-                    {game.balls ?? 0}-{game.strikes ?? 0}
-                  </span>
-                  <span className="text-ink-3 text-[9px] ml-1">B-K</span>
+              <div className="mt-3.5 flex items-center py-2 border-t border-line-2">
+                <ScoreChip
+                  side="away"
+                  abbr={game.away}
+                  score={game.awayScore ?? 0}
+                  visible={condensed}
+                />
+
+                <div className="flex-1 flex items-center justify-center gap-[18px]">
+                  <BaseDiamond bases={game.bases ?? [false, false, false]} size={32} />
+                  <div className="font-mono text-[13px] text-ink">
+                    <span className="font-semibold">
+                      {game.balls ?? 0}-{game.strikes ?? 0}
+                    </span>
+                    <span className="text-ink-3 text-[9px] ml-1">B-K</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <OutDots outs={game.outs ?? 0} />
+                    <span className="text-[10px] text-ink-3 font-mono">OUTS</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <OutDots outs={game.outs ?? 0} />
-                  <span className="text-[10px] text-ink-3 font-mono">OUTS</span>
-                </div>
+
+                <ScoreChip
+                  side="home"
+                  abbr={game.home}
+                  score={game.homeScore ?? 0}
+                  visible={condensed}
+                />
               </div>
             )}
           </div>
@@ -136,6 +236,8 @@ export function GameDetail({
               return (
                 <button
                   key={t}
+                  data-cy="sub-tab"
+                  data-cy-tab={t}
                   onClick={() => setTab(t)}
                   className={`px-3.5 py-2 bg-transparent cursor-pointer shrink-0 capitalize font-ui text-[13px] border-b-2 ${on ? "text-ink font-bold border-accent" : "text-ink-2 font-medium border-transparent"
                     }`}
@@ -149,13 +251,60 @@ export function GameDetail({
       </div>
 
       {data && (
-        <div className="flex-1 overflow-y-auto px-3.5 md:px-6 pt-3.5 pb-20 w-full max-w-275 mx-auto">
-          {tab === "summary" && <SummaryTab data={data} onPlayer={onPlayer} units={prefs.boxScoreUnits} />}
+        <div
+          data-cy="game-detail-scroll"
+          onScroll={onScrollContent}
+          className="flex-1 overflow-y-auto px-3.5 md:px-6 pt-3.5 pb-20 w-full max-w-275 mx-auto"
+        >
+          {tab === "summary" && (
+            <SummaryTab
+              data={data}
+              onPlayer={onPlayer}
+              units={prefs.boxScoreUnits}
+              showWinProbability={prefs.winProbability}
+            />
+          )}
           {tab === "box" && <BoxTab data={data} onPlayer={onPlayer} />}
           {tab === "plays" && <PlaysTab plays={data.plays} />}
           {tab === "pitches" && <PitchesTab data={data} units={prefs.boxScoreUnits} />}
+          {tab === "spray" && (
+            <SprayTab spray={data.spray} currentBatterId={data.atBat?.batter.id} />
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Compact team + score that lives in the game-state strip when the hero is
+ * collapsed. Animates in/out via `max-width` + `opacity` so it never affects
+ * the centered bases/B-K/outs cluster when invisible.
+ */
+function ScoreChip({
+  side,
+  abbr,
+  score,
+  visible,
+}: {
+  side: "away" | "home";
+  abbr: string;
+  score: number;
+  visible: boolean;
+}) {
+  const order = side === "away" ? "" : "flex-row-reverse";
+  return (
+    <div
+      data-cy="score-chip"
+      data-cy-side={side}
+      aria-hidden={!visible}
+      className={`flex items-center gap-2 overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 ease-out ${order} ${visible ? "max-w-[120px] opacity-100" : "max-w-0 opacity-0"
+        }`}
+    >
+      <TeamBadge abbr={abbr} size={22} />
+      <span className="font-head text-[18px] font-bold text-ink tracking-[-0.4px] leading-none">
+        {score}
+      </span>
     </div>
   );
 }
@@ -177,11 +326,31 @@ function TeamColumn({ abbr, onTeam }: { abbr: string; onTeam: (abbr: string) => 
 
 /* ── Summary tab ──────────────────────────────────────────────── */
 
-function SummaryTab({ data, onPlayer, units }: { data: GameDetailData; onPlayer: (id: number) => void; units: BoxScoreUnits }) {
-  const { summary, linescore, plays, atBat } = data;
+function SummaryTab({
+  data,
+  onPlayer,
+  units,
+  showWinProbability,
+}: {
+  data: GameDetailData;
+  onPlayer: (id: number) => void;
+  units: BoxScoreUnits;
+  showWinProbability: boolean;
+}) {
+  const { summary, linescore, plays, atBat, winProbability } = data;
+
+  // The server now hands us the freshest available at-bat: either the live one
+  // (isComplete=false) or, between at-bats, the just-finished one with its
+  // terminal pitch included (isComplete=true). That second case is what drives
+  // the result banner above the strike zone.
+  const showAtBatCard = summary.status === "LIVE" && !!atBat;
+  const priorOutcome = atBat?.isComplete ? plays[0] ?? null : null;
+
   return (
     <div className="flex flex-col gap-3.5">
-      {atBat && <AtBatCard ab={atBat} onPlayer={onPlayer} units={units} />}
+      {showAtBatCard && atBat && (
+        <AtBatCard ab={atBat} onPlayer={onPlayer} units={units} priorOutcome={priorOutcome} />
+      )}
 
       {linescore && (
         <div className="bg-surface border border-line rounded-[14px] px-1 py-3 overflow-x-auto">
@@ -231,6 +400,14 @@ function SummaryTab({ data, onPlayer, units }: { data: GameDetailData; onPlayer:
         </div>
       )}
 
+      {showWinProbability && winProbability && (
+        <WinProbabilityCard
+          away={summary.away}
+          home={summary.home}
+          probs={winProbability}
+        />
+      )}
+
       <div className="bg-surface border border-line rounded-[14px] p-3.5">
         <div className="text-[10px] tracking-[1.2px] uppercase text-ink-3 font-bold mb-2.5">
           Recent
@@ -271,14 +448,65 @@ function SummaryTab({ data, onPlayer, units }: { data: GameDetailData; onPlayer:
   );
 }
 
+/* ── Win Probability card ─────────────────────────────────────── */
+
+function WinProbabilityCard({
+  away,
+  home,
+  probs,
+}: {
+  away: string;
+  home: string;
+  probs: WinProbability;
+}) {
+  const awayPct = Math.round(probs.away);
+  const homePct = 100 - awayPct;
+  const awayColor = TEAMS[away]?.primary ?? "var(--color-accent)";
+  const homeColor = TEAMS[home]?.primary ?? "var(--color-ink-2)";
+
+  return (
+    <div className="bg-surface border border-line rounded-[14px] p-3.5">
+      <div className="text-[10px] tracking-[1.2px] uppercase text-ink-3 font-bold mb-3">
+        Win Probability
+      </div>
+      <div className="flex items-center gap-2.5">
+        <TeamBadge abbr={away} size={28} />
+        <div className="flex-1 h-3.5 rounded-full overflow-hidden flex bg-chip">
+          <div style={{ width: `${awayPct}%`, background: awayColor }} />
+          <div style={{ width: `${homePct}%`, background: homeColor }} />
+        </div>
+        <TeamBadge abbr={home} size={28} />
+      </div>
+      <div className="mt-2 flex items-center font-mono text-[15px] font-bold text-ink tracking-[-0.3px]">
+        <span>{awayPct}%</span>
+        <div className="flex-1" />
+        <span>{homePct}%</span>
+      </div>
+    </div>
+  );
+}
+
 /* ── At-Bat card ──────────────────────────────────────────────── */
 
-function AtBatCard({ ab, onPlayer, units }: { ab: AtBat; onPlayer: (id: number) => void; units: BoxScoreUnits }) {
+function AtBatCard({
+  ab,
+  onPlayer,
+  units,
+  priorOutcome,
+}: {
+  ab: AtBat;
+  onPlayer: (id: number) => void;
+  units: BoxScoreUnits;
+  priorOutcome?: Play | null;
+}) {
+  const isPrior = !!priorOutcome;
   return (
     <div className="bg-surface border border-line rounded-[14px] overflow-hidden">
       <div className="px-3.5 py-2.5 flex items-center gap-2 border-b border-line-2">
-        <span className="w-1.5 h-1.5 rounded-[3px] bg-live" />
-        <span className="text-[10px] tracking-[1.2px] text-ink font-extrabold uppercase">At Bat</span>
+        {!isPrior && <span className="w-1.5 h-1.5 rounded-[3px] bg-live" />}
+        <span className="text-[10px] tracking-[1.2px] text-ink font-extrabold uppercase">
+          {isPrior ? "Last At Bat" : "At Bat"}
+        </span>
         <span className="font-mono text-[11px] text-ink-3 ml-1.5">{ab.inningLabel}</span>
         <div className="flex-1" />
         <span className="font-mono text-[11px] text-ink-3">
@@ -343,6 +571,19 @@ function AtBatCard({ ab, onPlayer, units }: { ab: AtBat; onPlayer: (id: number) 
       </div>
 
       <div className="p-3.5">
+        {priorOutcome && (
+          <div className="mb-3 flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-chip">
+            <span className="text-[9px] tracking-[1.4px] text-ink-3 font-extrabold uppercase shrink-0">
+              Result
+            </span>
+            {priorOutcome.tag && (
+              <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded-sm bg-accent text-white shrink-0">
+                {priorOutcome.tag}
+              </span>
+            )}
+            <div className="flex-1 text-[12px] text-ink leading-tight">{priorOutcome.desc}</div>
+          </div>
+        )}
         <StrikeZoneViz pitches={ab.pitches} hand={ab.batter.hand} units={units} />
       </div>
 
@@ -392,11 +633,14 @@ function StrikeZoneViz({ pitches, hand, units }: { pitches: Pitch[]; hand: "L" |
     <div className="relative flex justify-center">
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-[320px] h-auto block">
         <rect x={zoneL - 18} y={zoneT - 18} width={zw + 36} height={zh + 36} fill="var(--color-chip)" opacity={0.5} rx="3" />
-        <rect x={zoneL} y={zoneT} width={zw} height={zh} fill="var(--color-surface)" stroke="var(--color-ink-2)" strokeWidth="1.5" />
-        <line x1={zoneL + zw / 3} y1={zoneT} x2={zoneL + zw / 3} y2={zoneB} stroke="var(--color-line)" strokeWidth="0.75" />
-        <line x1={zoneL + (2 * zw) / 3} y1={zoneT} x2={zoneL + (2 * zw) / 3} y2={zoneB} stroke="var(--color-line)" strokeWidth="0.75" />
-        <line x1={zoneL} y1={zoneT + zh / 3} x2={zoneR} y2={zoneT + zh / 3} stroke="var(--color-line)" strokeWidth="0.75" />
-        <line x1={zoneL} y1={zoneT + (2 * zh) / 3} x2={zoneR} y2={zoneT + (2 * zh) / 3} stroke="var(--color-line)" strokeWidth="0.75" />
+        <rect x={zoneL} y={zoneT} width={zw} height={zh} fill="var(--color-surface)" />
+        <g key={pitches.length} fill="none">
+          <rect x={zoneL} y={zoneT} width={zw} height={zh} pathLength="1" stroke="var(--color-ink-2)" strokeWidth="1.5" className="dl-zone-demarc" />
+          <line x1={zoneL + zw / 3} y1={zoneT} x2={zoneL + zw / 3} y2={zoneB} pathLength="1" stroke="var(--color-line)" strokeWidth="0.75" className="dl-zone-demarc" style={{ animationDelay: "120ms" }} />
+          <line x1={zoneL + (2 * zw) / 3} y1={zoneT} x2={zoneL + (2 * zw) / 3} y2={zoneB} pathLength="1" stroke="var(--color-line)" strokeWidth="0.75" className="dl-zone-demarc" style={{ animationDelay: "180ms" }} />
+          <line x1={zoneL} y1={zoneT + zh / 3} x2={zoneR} y2={zoneT + zh / 3} pathLength="1" stroke="var(--color-line)" strokeWidth="0.75" className="dl-zone-demarc" style={{ animationDelay: "240ms" }} />
+          <line x1={zoneL} y1={zoneT + (2 * zh) / 3} x2={zoneR} y2={zoneT + (2 * zh) / 3} pathLength="1" stroke="var(--color-line)" strokeWidth="0.75" className="dl-zone-demarc" style={{ animationDelay: "300ms" }} />
+        </g>
 
         <text x={zoneL - 6} y={zoneT - 6} fontSize="8" fill="var(--color-ink-3)" fontFamily="var(--font-mono)" letterSpacing="0.5" textAnchor="end">
           HIGH
@@ -533,6 +777,8 @@ function BoxSection({
         {lineup.map((r) => (
           <button
             key={r.id}
+            data-cy="box-player-row"
+            data-cy-player-id={r.id}
             onClick={() => onPlayer(r.id)}
             className="w-full grid items-center px-3.5 py-2 bg-transparent border-none cursor-pointer text-left border-b border-line-2"
             style={{ gridTemplateColumns: "1.6fr 24px 24px 24px 24px 24px 24px 40px" }}
@@ -568,6 +814,8 @@ function BoxSection({
         {pitching.map((r) => (
           <button
             key={r.id}
+            data-cy="box-player-row"
+            data-cy-player-id={r.id}
             onClick={() => onPlayer(r.id)}
             className="w-full grid items-center px-3.5 py-2 bg-transparent border-none cursor-pointer text-left border-b border-line-2"
             style={{ gridTemplateColumns: "1.6fr 32px 24px 24px 24px 24px 24px" }}
@@ -604,7 +852,7 @@ function PlaysTab({ plays }: { plays: Play[] }) {
         >
           <span className="font-mono text-[10px] text-ink-3 tracking-[0.5px]">{p.half}</span>
           {p.tag ? (
-            <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded-[4px] bg-accent text-white w-fit">
+            <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded-sm bg-accent text-white w-fit">
               {p.tag}
             </span>
           ) : (
@@ -623,13 +871,24 @@ function PlaysTab({ plays }: { plays: Play[] }) {
 /* ── Pitches tab ──────────────────────────────────────────────── */
 
 function PitchesTab({ data, units }: { data: GameDetailData; units: BoxScoreUnits }) {
-  const plays = data.plays.filter((p) => p.pitchSeq && p.pitchSeq.length > 0);
-  if (plays.length === 0) {
+  const { summary, awayPitching, homePitching } = data;
+  const playsWithPitches = data.plays.filter((p) => p.pitchSeq && p.pitchSeq.length > 0);
+  const hasUsage = [...awayPitching, ...homePitching].some(
+    (p) => p.pitchUsage && p.pitchUsage.length > 0,
+  );
+
+  if (!hasUsage && playsWithPitches.length === 0) {
     return <div className="p-6 text-ink-3 text-center">No pitch data yet.</div>;
   }
+
   return (
     <div className="flex flex-col gap-3">
-      {plays.map((p, i) => (
+      <PitchUsageCard abbr={summary.away} pitchers={awayPitching} />
+      <PitchUsageCard abbr={summary.home} pitchers={homePitching} />
+
+      <h3>Recent At-Bats</h3>
+
+      {playsWithPitches.map((p, i) => (
         <div key={i} className="bg-surface border border-line rounded-[14px] overflow-hidden">
           <div className="px-3.5 py-2.5 border-b border-line-2">
             <div className="font-mono text-[10px] text-ink-3">{p.half}</div>
@@ -654,6 +913,273 @@ function PitchesTab({ data, units }: { data: GameDetailData; units: BoxScoreUnit
               </div>
             ))}
           </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── Pitch usage ──────────────────────────────────────────────── */
+
+/** Per-team card listing each pitcher's pitch-type breakdown for this game. */
+function PitchUsageCard({ abbr, pitchers }: { abbr: string; pitchers: BoxPitchingRow[] }) {
+  const withUsage = pitchers.filter((p) => p.pitchUsage && p.pitchUsage.length > 0);
+  if (withUsage.length === 0) return null;
+  return (
+    <div className="bg-surface border border-line rounded-[14px] p-3.5">
+      <div className="text-[10px] tracking-[1.2px] uppercase text-ink-3 font-bold mb-3">
+        {abbr} · Pitching
+      </div>
+      <div className="flex flex-col gap-5">
+        {withUsage.map((p) => (
+          <PitcherUsage key={p.id} pitcher={p} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PitcherUsage({ pitcher }: { pitcher: BoxPitchingRow }) {
+  const usage = (pitcher.pitchUsage ?? []).slice().sort((a, b) => b.count - a.count);
+  const total = usage.reduce((s, e) => s + e.count, 0);
+  if (total === 0) return null;
+  const entries = usage.map((e) => ({ ...e, pct: Math.round((e.count / total) * 100) }));
+
+  return (
+    <div>
+      <div className="flex items-baseline gap-2 mb-2.5">
+        <span className="font-head text-[20px] font-bold text-ink tracking-[-0.5px] leading-none">
+          {pitcher.name}
+        </span>
+        {pitcher.live && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold tracking-[1.2px] text-live">
+            <span className="w-1.5 h-1.5 rounded-full bg-live" />
+            LIVE
+          </span>
+        )}
+        <div className="flex-1" />
+        <span className="font-mono text-[13px]">
+          <span className="font-bold text-ink">{pitcher.pitches ?? total}P</span>
+          <span className="text-ink-3"> · </span>
+          <span className="text-ink-2">{pitcher.ip} IP</span>
+        </span>
+      </div>
+
+      <div className="h-2.5 rounded-sm overflow-hidden flex bg-chip mb-3">
+        {entries.map((e) => (
+          <div key={e.type} style={{ width: `${e.pct}%`, background: pitchColor(e.type) }} />
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-x-5 gap-y-2">
+        {entries.map((e) => (
+          <div key={e.type} className="flex items-center gap-2.5">
+            <span
+              className="w-2 h-2 rounded-full shrink-0"
+              style={{ background: pitchColor(e.type) }}
+            />
+            <span className="font-mono text-[12px] font-bold text-ink-2 w-6">{e.type}</span>
+            <span className="font-ui text-[13px] text-ink flex-1">
+              {PITCH_TYPE_NAMES[e.type] ?? e.type}
+            </span>
+            <span className="font-mono text-[13px] font-bold text-ink">{e.pct}%</span>
+            <span className="font-mono text-[12px] text-ink-3 w-7 text-right">({e.count})</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── Spray tab ────────────────────────────────────────────────── */
+
+function SprayTab({
+  spray,
+  currentBatterId,
+}: {
+  spray: BatterSpray[];
+  currentBatterId?: number;
+}) {
+  const populated = spray.filter((s) => s.points.length > 0);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+
+  if (populated.length === 0) {
+    return <div className="p-6 text-ink-3 text-center">No batted-ball data yet.</div>;
+  }
+
+  // Resolve the visible batter: explicit user pick → current batter (if they
+  // have spray data this game) → most-recent batter (spray[0], because the
+  // transform sorts by recency desc).
+  const inSpray = (id: number | undefined) => id != null && populated.some((s) => s.batterId === id);
+  const effectiveId =
+    (selectedId != null && inSpray(selectedId) ? selectedId : null) ??
+    (inSpray(currentBatterId) ? (currentBatterId as number) : null) ??
+    populated[0].batterId;
+
+  const selected = populated.find((s) => s.batterId === effectiveId) ?? populated[0];
+
+  return (
+    <div className="flex flex-col gap-3">
+      <BatterPicker
+        batters={populated}
+        selectedId={effectiveId}
+        currentBatterId={currentBatterId}
+        onSelect={setSelectedId}
+      />
+      <SprayCard spray={selected} />
+    </div>
+  );
+}
+
+function BatterPicker({
+  batters,
+  selectedId,
+  currentBatterId,
+  onSelect,
+}: {
+  batters: BatterSpray[];
+  selectedId: number;
+  currentBatterId?: number;
+  onSelect: (id: number) => void;
+}) {
+  // Group by team abbr, preserving the (recency-sorted) order within each group.
+  const byTeam = new Map<string, BatterSpray[]>();
+  for (const b of batters) {
+    const list = byTeam.get(b.team) ?? [];
+    list.push(b);
+    byTeam.set(b.team, list);
+  }
+
+  return (
+    <label className="relative block w-full">
+      <span className="sr-only">Choose batter</span>
+      <select
+        data-cy="batter-picker"
+        value={String(selectedId)}
+        onChange={(e) => onSelect(Number(e.target.value))}
+        className="w-full appearance-none cursor-pointer bg-surface border border-line rounded-xl pl-3.5 pr-9 py-2.5 font-head text-[14px] font-semibold text-ink tracking-[-0.2px] focus:outline-none focus:border-accent"
+      >
+        {[...byTeam.entries()].map(([team, list]) => (
+          <optgroup key={team} label={team}>
+            {list.map((b) => (
+              <option key={b.batterId} value={String(b.batterId)}>
+                {b.batterId === currentBatterId ? "● " : ""}
+                {b.lastName} ({b.points.length})
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+      <span
+        aria-hidden="true"
+        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-ink-3 text-[11px] pointer-events-none font-mono"
+      >
+        ▾
+      </span>
+    </label>
+  );
+}
+
+function SprayCard({ spray }: { spray: BatterSpray }) {
+  const n = spray.points.length;
+  return (
+    <div className="bg-surface border border-line rounded-[14px] p-3.5">
+      <div className="mb-2.5">
+        <div className="font-head text-[18px] font-bold text-ink tracking-[-0.3px]">
+          {spray.lastName} · Spray Chart
+        </div>
+        <div className="text-[12px] text-ink-2 mt-0.5">
+          {n === 1 ? "1 batted ball" : `${n} batted balls`} · all outcomes
+        </div>
+      </div>
+      <SprayField points={spray.points} />
+      <SprayLegend />
+    </div>
+  );
+}
+
+/** Diamond + outfield wall + batted-ball dots, drawn in MLB's 0–250 hitData
+ *  coordinate space (home plate ≈ (125, 205), y decreases toward the outfield). */
+function SprayField({ points }: { points: SprayPoint[] }) {
+  const HOME_X = 125;
+  const HOME_Y = 205;
+  const wallR = 175;
+  const innerR = 110;
+  const k = Math.SQRT1_2; // sin/cos of 45°
+
+  const wallLF = { x: HOME_X - wallR * k, y: HOME_Y - wallR * k };
+  const wallRF = { x: HOME_X + wallR * k, y: HOME_Y - wallR * k };
+  const innerLF = { x: HOME_X - innerR * k, y: HOME_Y - innerR * k };
+  const innerRF = { x: HOME_X + innerR * k, y: HOME_Y - innerR * k };
+
+  // Infield diamond (home → 1B → 2B → 3B), 30-unit edge.
+  const diamond = `${HOME_X},${HOME_Y} ${HOME_X + 30},${HOME_Y - 30} ${HOME_X},${HOME_Y - 60} ${HOME_X - 30},${HOME_Y - 30}`;
+
+  return (
+    <svg viewBox="0 0 250 240" className="w-full h-auto block mb-2.5 lg:max-w-[420px] lg:mx-auto">
+      {/* Foul lines */}
+      <line x1={HOME_X} y1={HOME_Y} x2={wallLF.x} y2={wallLF.y} stroke="var(--color-ink-3)" strokeWidth="1" />
+      <line x1={HOME_X} y1={HOME_Y} x2={wallRF.x} y2={wallRF.y} stroke="var(--color-ink-3)" strokeWidth="1" />
+
+      {/* Outfield wall arc */}
+      <path
+        d={`M ${wallLF.x} ${wallLF.y} A ${wallR} ${wallR} 0 0 1 ${wallRF.x} ${wallRF.y}`}
+        fill="none"
+        stroke="var(--color-line)"
+        strokeWidth="0.75"
+      />
+
+      {/* Mid-outfield arc */}
+      <path
+        d={`M ${innerLF.x} ${innerLF.y} A ${innerR} ${innerR} 0 0 1 ${innerRF.x} ${innerRF.y}`}
+        fill="none"
+        stroke="var(--color-line-2)"
+        strokeWidth="0.5"
+      />
+
+      {/* Infield diamond */}
+      <polygon
+        points={diamond}
+        fill="var(--color-chip)"
+        stroke="var(--color-line)"
+        strokeWidth="0.75"
+      />
+
+      {/* Home plate marker */}
+      <circle cx={HOME_X} cy={HOME_Y} r="2" fill="var(--color-ink-2)" />
+
+      {/* Field labels */}
+      <text x="38" y="180" fontSize="9" fill="var(--color-ink-3)" fontFamily="var(--font-mono)" letterSpacing="0.5">LF</text>
+      <text x={HOME_X} y="125" fontSize="9" fill="var(--color-ink-3)" textAnchor="middle" fontFamily="var(--font-mono)" letterSpacing="0.5">CF</text>
+      <text x="212" y="180" fontSize="9" fill="var(--color-ink-3)" fontFamily="var(--font-mono)" letterSpacing="0.5">RF</text>
+
+      {/* Batted-ball points */}
+      {points.map((p, i) => (
+        <circle
+          key={i}
+          cx={p.x}
+          cy={p.y}
+          r="4.5"
+          fill={SPRAY_COLORS[p.outcome]}
+          stroke="var(--color-surface)"
+          strokeWidth="1"
+        />
+      ))}
+    </svg>
+  );
+}
+
+function SprayLegend() {
+  const entries: SprayOutcome[] = ["HR", "2B", "1B", "OUT"];
+  return (
+    <div className="flex items-center gap-4 pt-0.5">
+      {entries.map((o) => (
+        <div key={o} className="flex items-center gap-1.5">
+          <span
+            className="w-2 h-2 rounded-full"
+            style={{ background: SPRAY_COLORS[o] }}
+          />
+          <span className="font-mono text-[11px] font-bold text-ink-2 tracking-[0.5px]">{o}</span>
         </div>
       ))}
     </div>

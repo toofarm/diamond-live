@@ -72,7 +72,7 @@ export function LeadersScreen({ onPlayer }: { onPlayer: (id: number) => void }) 
   return (
     <>
       <AppBar title="Leaders" />
-      <div className="bg-canvas px-[14px] md:px-6 pt-3 pb-[100px] max-w-[900px] w-full mx-auto">
+      <div data-cy="leaders-screen" className="bg-canvas px-[14px] md:px-6 pt-3 pb-[100px] max-w-[900px] w-full mx-auto">
         {/* Group toggle — pill segmented control on a tan track */}
         <div
           className="relative inline-flex w-full p-1 rounded-full"
@@ -87,6 +87,8 @@ export function LeadersScreen({ onPlayer }: { onPlayer: (id: number) => void }) 
                 key={g.id}
                 role="tab"
                 aria-selected={on}
+                data-cy="group-tab"
+                data-cy-group={g.id}
                 onClick={() => selectGroup(g.id)}
                 className={`flex-1 py-2.5 rounded-full border-none cursor-pointer font-head text-[15px] font-semibold tracking-[-0.2px] transition-colors ${
                   on ? "bg-accent text-white" : "bg-transparent text-ink-2"
@@ -105,6 +107,8 @@ export function LeadersScreen({ onPlayer }: { onPlayer: (id: number) => void }) 
             return (
               <button
                 key={c.id}
+                data-cy="metric-pill"
+                data-cy-metric={c.id}
                 onClick={() => setCatId(c.id)}
                 className={`shrink-0 min-w-[64px] px-4 py-2 rounded-full cursor-pointer font-mono text-[14px] font-bold tracking-[0.3px] transition-colors ${
                   on
@@ -200,6 +204,8 @@ function LeaderList({
               return (
                 <button
                   key={r.personId}
+                  data-cy="leader-row"
+                  data-cy-player-id={r.personId}
                   onClick={() => onPlayer(r.personId)}
                   className={`w-full grid items-center gap-3 px-3 md:px-4 py-3 border-t border-line-2 bg-transparent border-l-0 border-r-0 border-b-0 cursor-pointer text-left transition-colors ${
                     leader ? "" : "hover:bg-canvas"
@@ -236,6 +242,7 @@ function LeaderList({
 
             {canLoadMore && (
               <button
+                data-cy="load-more"
                 onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
                 className="w-full px-4 py-3.5 border-t border-line bg-transparent border-l-0 border-r-0 border-b-0 cursor-pointer font-ui text-[12px] font-bold tracking-[1.2px] uppercase text-accent hover:bg-canvas transition-colors"
               >

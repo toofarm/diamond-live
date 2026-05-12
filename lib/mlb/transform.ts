@@ -31,11 +31,14 @@ import type {
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-function fmtLocalTime(iso: string | undefined): string | undefined {
+/** Pass an ISO timestamp through if valid; the UI formats it in the user's
+   local timezone via lib/date.ts:formatLocalTime. Formatting server-side would
+   silently use the server's timezone instead of the viewer's. */
+function passThroughISO(iso: string | undefined): string | undefined {
   if (!iso) return undefined;
   const d = new Date(iso);
   if (Number.isNaN(+d)) return undefined;
-  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return iso;
 }
 
 function dateISOFromGameDate(iso: string | undefined): string {
@@ -88,7 +91,7 @@ export function mapScheduleGame(g: any, dateISO?: string): GameSummary | null {
     status,
     statusDetail: g?.status?.detailedState,
     dateISO: dateISO ?? dateISOFromGameDate(g?.gameDate),
-    time: fmtLocalTime(g?.gameDate),
+    time: passThroughISO(g?.gameDate),
     pitchers: {
       away: readPitcher(g?.teams?.away?.probablePitcher),
       home: readPitcher(g?.teams?.home?.probablePitcher),
@@ -127,7 +130,7 @@ export function mapScheduleListGame(g: any, dateISO: string): ScheduleGame | nul
     away_score: typeof g?.teams?.away?.score === "number" ? g.teams.away.score : undefined,
     home_score: typeof g?.teams?.home?.score === "number" ? g.teams.home.score : undefined,
     status,
-    time: fmtLocalTime(g?.gameDate),
+    time: passThroughISO(g?.gameDate),
     statusDetail: g?.status?.detailedState,
     series: g?.seriesGameNumber && g?.gamesInSeries ? { idx: g.seriesGameNumber, len: g.gamesInSeries } : undefined,
   };
@@ -279,13 +282,31 @@ function mapBoxPitching(side: any): BoxPitchingRow[] {
   return rows;
 }
 
-/** Build an AtBat snapshot from the current plate-appearance play (if game is live). */
+/** Build an AtBat snapshot from the current plate-appearance play (if game is live).
+   When currentPlay has no pitch events yet (between at-bats / between innings),
+   fall back to the most recently completed play in allPlays so the just-finished
+   at-bat — including its terminal pitch — stays on screen until the next batter
+   sees a pitch. The fallback emits isComplete=true so the client can banner it. */
 function mapAtBat(feed: any): AtBat | null {
   const live = feed?.liveData;
-  const cur = live?.plays?.currentPlay;
-  if (!cur) return null;
-  const events = cur?.playEvents ?? [];
-  const pitchEvents = events.filter((e: any) => e?.isPitch);
+  const currentPlay = live?.plays?.currentPlay;
+  const currentPitches = (currentPlay?.playEvents ?? []).filter((e: any) => e?.isPitch);
+
+  let cur = currentPlay;
+  let pitchEvents = currentPitches;
+  let isComplete = Boolean(currentPlay?.about?.isComplete);
+
+  if (!cur || pitchEvents.length === 0) {
+    const allPlays = (live?.plays?.allPlays ?? []) as any[];
+    const fallback = [...allPlays].reverse().find((p: any) => {
+      if (!p?.result?.event) return false;
+      return (p?.playEvents ?? []).some((e: any) => e?.isPitch);
+    });
+    if (!fallback) return null;
+    cur = fallback;
+    pitchEvents = (cur?.playEvents ?? []).filter((e: any) => e?.isPitch);
+    isComplete = true;
+  }
   if (pitchEvents.length === 0) return null;
 
   const pitches: Pitch[] = pitchEvents.map((e: any, i: number): Pitch => {
@@ -382,6 +403,7 @@ function mapAtBat(feed: any): AtBat | null {
       Boolean(matchup?.postOnThird),
     ],
     pitches,
+    isComplete,
   };
 
   // suppress unused warning for the dest variable
@@ -389,7 +411,7 @@ function mapAtBat(feed: any): AtBat | null {
   return ab;
 }
 
-export function mapGameDetail(feed: any, dateISO?: string): GameDetailData {
+export function mapGameDetail(feed: any, dateISO?: string, winProbabilityFeed?: any): GameDetailData {
   const game = feed?.gameData;
   const live = feed?.liveData;
   const awayId = game?.teams?.away?.id;
@@ -409,7 +431,7 @@ export function mapGameDetail(feed: any, dateISO?: string): GameDetailData {
     status,
     statusDetail: game?.status?.detailedState,
     dateISO: dateISO ?? dateISOFromGameDate(game?.datetime?.dateTime),
-    time: fmtLocalTime(game?.datetime?.dateTime),
+    time: passThroughISO(game?.datetime?.dateTime),
     venue: game?.venue?.name,
     weather: game?.weather?.condition,
   };
@@ -433,10 +455,15 @@ export function mapGameDetail(feed: any, dateISO?: string): GameDetailData {
   const box = live?.boxscore ?? {};
   const awayLineup = mapBoxLineup(box?.teams?.away);
   const homeLineup = mapBoxLineup(box?.teams?.home);
-  const awayPitching = mapBoxPitching(box?.teams?.away);
-  const homePitching = mapBoxPitching(box?.teams?.home);
+  const allPlays = (live?.plays?.allPlays ?? []) as any[];
+  const usageByPitcher = computePitchUsageByPitcher(allPlays);
+  const gameIsLive = status === "LIVE";
+  const awayPitching = decoratePitching(mapBoxPitching(box?.teams?.away), usageByPitcher, gameIsLive);
+  const homePitching = decoratePitching(mapBoxPitching(box?.teams?.home), usageByPitcher, gameIsLive);
 
   const atBat = status === "LIVE" ? mapAtBat(feed) : null;
+  const winProbability = readWinProbability(winProbabilityFeed);
+  const spray = computeBatterSprays(allPlays, awayAbbr, homeAbbr, awayId, homeId);
 
   return {
     summary,
@@ -447,7 +474,194 @@ export function mapGameDetail(feed: any, dateISO?: string): GameDetailData {
     homePitching,
     plays,
     atBat,
+    winProbability,
+    spray,
   };
+}
+
+/**
+ * Bucket an MLB result.event string into our four spray outcome categories.
+ * Anything that left the bat but didn't land for a hit (groundouts, flyouts,
+ * fielder's choice, reach-on-error, sac flies, etc.) lumps into OUT — color
+ * fidelity over taxonomic purity.
+ */
+function classifySprayOutcome(event: string | undefined): import("./types").SprayOutcome | null {
+  if (!event) return null;
+  const e = event.toLowerCase();
+  if (e.includes("home run")) return "HR";
+  if (e.includes("triple")) return "3B";
+  if (e.includes("double") && !e.includes("double play")) return "2B";
+  if (e.includes("single")) return "1B";
+  // Catch-all for in-play results that aren't hits.
+  if (
+    e.includes("out") ||
+    e.includes("groundout") ||
+    e.includes("flyout") ||
+    e.includes("lineout") ||
+    e.includes("popout") ||
+    e.includes("forceout") ||
+    e.includes("pop out") ||
+    e.includes("ground out") ||
+    e.includes("fly out") ||
+    e.includes("line out") ||
+    e.includes("fielders choice") ||
+    e.includes("fielder's choice") ||
+    e.includes("sac fly") ||
+    e.includes("sacrifice") ||
+    e.includes("error") ||
+    e.includes("double play") ||
+    e.includes("triple play")
+  ) {
+    return "OUT";
+  }
+  return null;
+}
+
+/**
+ * Walk allPlays for completed at-bats with a landed ball, group by batter id,
+ * and emit per-batter spray points. The coordinate field on a hitData event
+ * lives in MLB's 0–250 image-coordinate space (home plate ≈ (125, 205)), so
+ * the UI can plot the dots directly against a matching viewBox.
+ */
+function computeBatterSprays(
+  allPlays: any[],
+  awayAbbr: string,
+  homeAbbr: string,
+  awayTeamId: number | undefined,
+  homeTeamId: number | undefined,
+): import("./types").BatterSpray[] {
+  const byBatter = new Map<number, import("./types").BatterSpray>();
+  // Most-recent batter ordering: allPlays is in chronological order, so each
+  // time we touch a batter we bump their order index. Sorting by this index
+  // desc puts the latest hitter at the front of the picker.
+  const lastOrder = new Map<number, number>();
+  let order = 0;
+  for (const p of allPlays) {
+    const event = p?.result?.event as string | undefined;
+    const outcome = classifySprayOutcome(event);
+    if (!outcome) continue;
+    const batterId = p?.matchup?.batter?.id;
+    if (typeof batterId !== "number") continue;
+    // Find the play event carrying the hit-coordinate payload — typically the
+    // final pitch of the AB.
+    const events = (p?.playEvents ?? []) as any[];
+    const hitEv = [...events].reverse().find((ev) => ev?.hitData?.coordinates);
+    const coords = hitEv?.hitData?.coordinates;
+    const x = coords?.coordX;
+    const y = coords?.coordY;
+    if (typeof x !== "number" || typeof y !== "number") continue;
+
+    const battingTeamId = p?.matchup?.batter?.parentTeamId ?? p?.matchup?.batSide?.teamId;
+    const team =
+      battingTeamId === awayTeamId
+        ? awayAbbr
+        : battingTeamId === homeTeamId
+          ? homeAbbr
+          : p?.about?.halfInning === "top"
+            ? awayAbbr
+            : homeAbbr;
+
+    let entry = byBatter.get(batterId);
+    if (!entry) {
+      const fullName = p?.matchup?.batter?.fullName ?? "";
+      const lastName = fullName.split(" ").slice(-1)[0] ?? fullName;
+      entry = {
+        batterId,
+        fullName,
+        lastName,
+        team,
+        points: [],
+      };
+      byBatter.set(batterId, entry);
+    }
+    entry.points.push({
+      x,
+      y,
+      outcome,
+      inning: p?.about?.inning ?? undefined,
+      half: p?.about?.halfInning === "bottom" ? "BOT" : p?.about?.halfInning === "top" ? "TOP" : undefined,
+      event,
+    });
+    order++;
+    lastOrder.set(batterId, order);
+  }
+  // Most-recent batter first; lastName breaks ties (e.g. same play index).
+  return [...byBatter.values()].sort((a, b) => {
+    const ao = lastOrder.get(a.batterId) ?? 0;
+    const bo = lastOrder.get(b.batterId) ?? 0;
+    return bo - ao || a.lastName.localeCompare(b.lastName);
+  });
+}
+
+/**
+ * Walk every plate appearance and tally pitch-type counts per pitcher. Returns
+ * a map keyed by pitcher player id → { typeCode: count }. Pitches without a
+ * recognizable type code are skipped (intentional pitches, pickoffs, etc.).
+ */
+function computePitchUsageByPitcher(allPlays: any[]): Map<number, Record<string, number>> {
+  const out = new Map<number, Record<string, number>>();
+  for (const p of allPlays) {
+    const pitcherId = p?.matchup?.pitcher?.id;
+    if (typeof pitcherId !== "number") continue;
+    const events = (p?.playEvents ?? []) as any[];
+    for (const ev of events) {
+      if (!ev?.isPitch) continue;
+      const code = ev?.details?.type?.code;
+      if (typeof code !== "string" || code.length === 0) continue;
+      const counts = out.get(pitcherId) ?? {};
+      counts[code] = (counts[code] ?? 0) + 1;
+      out.set(pitcherId, counts);
+    }
+  }
+  return out;
+}
+
+/**
+ * Attach `pitchUsage` (from the play-events tally) and — for in-progress games
+ * only — flag the team's most recent pitcher as `live`. Final/scheduled games
+ * leave `live` undefined so the UI doesn't pin a "LIVE" tag on a closer who
+ * recorded the last out hours ago.
+ */
+function decoratePitching(
+  rows: import("./types").BoxPitchingRow[],
+  usageByPitcher: Map<number, Record<string, number>>,
+  gameIsLive: boolean,
+): import("./types").BoxPitchingRow[] {
+  if (rows.length === 0) return rows;
+  return rows.map((row, i) => {
+    const counts = usageByPitcher.get(row.id);
+    const pitchUsage = counts
+      ? Object.entries(counts).map(([type, count]) => ({ type, count }))
+      : undefined;
+    const live = gameIsLive && i === rows.length - 1 ? true : undefined;
+    return { ...row, pitchUsage, live };
+  });
+}
+
+/**
+ * Pull the most recent home/away win probability from the dedicated
+ * `/api/v1/game/{gamePk}/winProbability` endpoint, which returns an array of
+ * play entries each with `homeTeamWinProbability` and `awayTeamWinProbability`
+ * (0–100). We scan from the end for the latest entry that has those set.
+ * Returns null if unavailable (pregame, missing endpoint payload, etc.) — the
+ * live feed itself does NOT carry per-play win-probability fields, so we rely
+ * on this auxiliary endpoint instead.
+ */
+function readWinProbability(wpFeed: any): { home: number; away: number } | null {
+  const entries = Array.isArray(wpFeed) ? wpFeed : [];
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const p = entries[i];
+    const home = p?.homeTeamWinProbability;
+    const away = p?.awayTeamWinProbability;
+    if (typeof home === "number" && Number.isFinite(home)) {
+      const h = Math.max(0, Math.min(100, home));
+      const a = typeof away === "number" && Number.isFinite(away)
+        ? Math.max(0, Math.min(100, away))
+        : 100 - h;
+      return { home: h, away: a };
+    }
+  }
+  return null;
 }
 
 /* ── Leaders ─────────────────────────────────────────────────────────────── */

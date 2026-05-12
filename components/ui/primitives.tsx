@@ -78,7 +78,7 @@ export function TeamBadge({ abbr, size = 28 }: { abbr: string; size?: number }) 
         height: size,
         borderRadius: size * 0.28,
         fontSize: fs,
-        background: bg,
+        background: showImage ? 'transparent' : bg,
       }}
       aria-label={alt}
       role="img"
@@ -94,9 +94,8 @@ export function TeamBadge({ abbr, size = 28 }: { abbr: string; size?: number }) 
           decoding="async"
           onLoad={() => setStatus("loaded")}
           onError={() => setStatus("error")}
-          className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-200 ${
-            status === "loaded" ? "opacity-100" : "opacity-0"
-          }`}
+          className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-200 ${status === "loaded" ? "opacity-100" : "opacity-0"
+            }`}
         />
       )}
     </div>
@@ -145,7 +144,7 @@ export function SectionHead({
   right?: ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-2.5 px-1 pt-[14px] pb-2">
+    <div className="flex items-center gap-2.5 px-1 pt-3.5 pb-2">
       {icon}
       <div className="font-head font-semibold text-[13px] tracking-[1.4px] uppercase text-ink-2 flex-1">
         {title}
@@ -185,7 +184,7 @@ export function OutDots({ outs = 0 }: { outs?: number }) {
         return (
           <div
             key={i}
-            className={`w-[7px] h-[7px] rounded-[4px] border-[1.4px] ${on ? "bg-accent border-accent" : "bg-transparent border-ink-2"
+            className={`w-1.75 h-1.75 rounded-sm border-[1.4px] ${on ? "bg-accent border-accent" : "bg-transparent border-ink-2"
               }`}
           />
         );
@@ -214,7 +213,7 @@ export function Wordmark() {
       <Link href="/" className="flex flex-row items-center gap-2 no-underline text-inherit">
         <BaseballMark />
         <div className="font-head font-bold text-[18px] text-ink tracking-[-0.5px]">
-          Diamond<span className="text-accent">·</span>Live
+          Game<span className="text-accent">·</span>State
         </div>
       </Link>
     </div>
@@ -261,7 +260,7 @@ export function TopBar({
       .toUpperCase() || "G";
 
   return (
-    <header className="sticky top-0 z-[6] bg-surface border-b border-line-2 px-4 md:px-6 pb-3 pt-[calc(env(safe-area-inset-top,0)+18px)]">
+    <header className="sticky top-0 z-6 bg-surface border-b border-line-2 px-4 md:px-6 pb-3 pt-[calc(env(safe-area-inset-top,0)+18px)]">
       <div className="flex items-center gap-3 md:gap-6">
         <Wordmark />
 
@@ -279,7 +278,7 @@ export function TopBar({
                 {t.icon({
                   size: 16,
                   stroke: active ? "var(--color-ink)" : "var(--color-ink-2)",
-                  fill: active ? "var(--color-ink)" : "none",
+                  fill: "none",
                 })}
                 <span>{t.label}</span>
               </button>
@@ -291,9 +290,9 @@ export function TopBar({
 
         <button
           onClick={onProfile}
-          className="bg-chip border-none rounded-full pl-1 pr-3 py-1 cursor-pointer flex items-center gap-2 font-ui text-xs font-semibold text-ink hover:bg-line-2 transition-colors"
+          className="bg-chip border-none rounded-full pr-1 pl-1 py-1 md:pr-3 cursor-pointer flex items-center gap-2 font-ui text-xs font-semibold text-ink hover:bg-line-2 transition-colors"
         >
-          <span className="w-[22px] h-[22px] rounded-full bg-accent text-white flex items-center justify-center font-mono text-[10px] font-bold">
+          <span className="w-5.5 h-5.5 rounded-full bg-accent text-white flex items-center justify-center font-mono text-[10px] font-bold">
             {initials}
           </span>
           <span className="hidden sm:inline">{userName || "Guest"}</span>
@@ -402,7 +401,7 @@ export function TabBar({
             {t.icon({
               size: 22,
               stroke: active ? "var(--color-accent)" : "var(--color-ink-2)",
-              fill: active ? "var(--color-accent)" : "none",
+              fill: "none",
             })}
             <span className="text-[10px] font-semibold tracking-[0.2px]">{t.label}</span>
           </button>

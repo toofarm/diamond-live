@@ -1,0 +1,17 @@
+{
+  "start": "2026-05-11",
+  "end": "2026-05-13",
+  "today": "2026-05-12",
+  "games": [
+    { "id": 9001, "dateISO": "2026-05-11", "away": "NYM", "home": "ATL", "away_score": 3, "home_score": 5, "status": "FINAL", "statusDetail": "Final" },
+    { "id": 9002, "dateISO": "2026-05-11", "away": "BOS", "home": "NYY", "away_score": 4, "home_score": 6, "status": "FINAL", "statusDetail": "Final" },
+    { "id": 9003, "dateISO": "2026-05-11", "away": "LAD", "home": "SF",  "away_score": 7, "home_score": 2, "status": "FINAL", "statusDetail": "Final" },
+    { "id": 1,    "dateISO": "2026-05-12", "away": "NYM", "home": "PHI", "away_score": 4, "home_score": 2, "status": "LIVE",  "statusDetail": "TOP 7", "time": "2026-05-12T23:05:00Z" },
+    { "id": 9004, "dateISO": "2026-05-12", "away": "BOS", "home": "NYY", "status": "SCHEDULED", "time": "2026-05-12T23:05:00Z" },
+    { "id": 9005, "dateISO": "2026-05-12", "away": "LAD", "home": "SF",  "status": "SCHEDULED", "time": "2026-05-13T02:15:00Z" },
+    { "id": 9006, "dateISO": "2026-05-12", "away": "CHC", "home": "STL", "status": "SCHEDULED", "time": "2026-05-13T00:15:00Z" },
+    { "id": 9007, "dateISO": "2026-05-13", "away": "PHI", "home": "NYM", "status": "SCHEDULED", "time": "2026-05-13T17:10:00Z" },
+    { "id": 9008, "dateISO": "2026-05-13", "away": "NYY", "home": "BOS", "status": "SCHEDULED", "time": "2026-05-13T23:10:00Z" },
+    { "id": 9009, "dateISO": "2026-05-13", "away": "SD",  "home": "LAD", "status": "SCHEDULED", "time": "2026-05-14T02:10:00Z" }
+  ]
+}

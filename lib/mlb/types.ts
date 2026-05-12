@@ -11,7 +11,7 @@ export interface GameSummary {
   homeScore: number | null;
   status: GameStatus;
   statusDetail?: string;      // raw MLB detailed state
-  time?: string;              // local time string like "7:05 PM" (for SCHEDULED)
+  time?: string;              // ISO 8601 game-start timestamp (formatted client-side via lib/date.ts:formatLocalTime)
   dateISO: string;            // YYYY-MM-DD (game's official date)
 
   // LIVE-only
@@ -62,6 +62,12 @@ export interface BoxLineupRow {
   avg?: string;
 }
 
+export interface PitchUsageEntry {
+  /** Pitch type code, e.g. 'FF', 'SL', 'CH'. */
+  type: string;
+  count: number;
+}
+
 export interface BoxPitchingRow {
   id: number;
   name: string;
@@ -69,6 +75,39 @@ export interface BoxPitchingRow {
   h: number; r: number; er: number; bb: number; k: number; hr: number;
   era?: string;
   pitches?: number;
+  /** Counts by pitch type for this pitcher in the current game. */
+  pitchUsage?: PitchUsageEntry[];
+  /** True when this pitcher is the most recent / currently-active arm for the team. */
+  live?: boolean;
+}
+
+export interface WinProbability {
+  /** 0–100, sums to 100 with home. */
+  away: number;
+  home: number;
+}
+
+export type SprayOutcome = "HR" | "3B" | "2B" | "1B" | "OUT";
+
+export interface SprayPoint {
+  /** MLB Stats API hitData coords (0–250 image space, home plate near y≈205). */
+  x: number;
+  y: number;
+  outcome: SprayOutcome;
+  inning?: number;
+  half?: HalfInning;
+  /** e.g. "Single", "Groundout", short result label. */
+  event?: string;
+}
+
+export interface BatterSpray {
+  batterId: number;
+  /** Full name as it appears in the feed, e.g. "Francisco Lindor". */
+  fullName: string;
+  lastName: string;
+  /** Team abbreviation. */
+  team: string;
+  points: SprayPoint[];
 }
 
 export interface GameDetailData {
@@ -80,6 +119,9 @@ export interface GameDetailData {
   homePitching: BoxPitchingRow[];
   plays: Play[];
   atBat: AtBat | null;
+  winProbability: WinProbability | null;
+  /** Per-batter batted-ball spray points for the current game. */
+  spray: BatterSpray[];
 }
 
 export interface AtBat {
@@ -109,6 +151,10 @@ export interface AtBat {
   outs: number;
   bases: [boolean, boolean, boolean];
   pitches: Pitch[];
+  /** True when this snapshot is the just-finished plate appearance (terminal
+     pitch included), false while the at-bat is in progress. The client uses
+     this to decide whether to render the result banner above the strike zone. */
+  isComplete: boolean;
 }
 
 export interface StandingsRow {
@@ -127,7 +173,7 @@ export interface ScheduleGame {
   away_score?: number;
   home_score?: number;
   status: GameStatus;
-  time?: string;
+  time?: string;             // ISO 8601 game-start timestamp (formatted client-side via lib/date.ts:formatLocalTime)
   statusDetail?: string;
   series?: { idx: number; len: number };
 }

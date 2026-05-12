@@ -61,6 +61,15 @@ export function formatTodayHeader(): string {
   return `${WEEKDAYS[d.getDay()]} · ${MONTHS[d.getMonth()].toUpperCase()} ${d.getDate()} · ${d.getFullYear()}`;
 }
 
+/** Format an ISO 8601 timestamp as a clock time in the user's local timezone.
+   Display-only helper for game start times. Returns undefined for bad input. */
+export function formatLocalTime(iso: string | undefined): string | undefined {
+  if (!iso) return undefined;
+  const d = new Date(iso);
+  if (Number.isNaN(+d)) return undefined;
+  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
 /** Current MLB season year (the regular season runs Mar–Oct). */
 export function currentSeason(): number {
   const now = new Date();

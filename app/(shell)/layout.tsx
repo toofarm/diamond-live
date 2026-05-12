@@ -33,7 +33,27 @@ export default function ShellLayout({ children }: { children: React.ReactNode })
   const user = useUser();
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const [manageMode, setManageMode] = useState(false);
-  const onboardingOpen = manageMode || (user == null && !onboardingDismissed);
+
+  // Keep the <html data-theme> attribute in lockstep with the user's theme
+  // preference so toggles in Settings apply without a reload. The initial
+  // value is set pre-hydration by the boot script in app/layout.tsx.
+  const theme = user?.prefs?.theme;
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (theme === "twilight") {
+      document.documentElement.setAttribute("data-theme", "twilight");
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+    }
+  }, [theme]);
+  // `useUser` is backed by useSyncExternalStore with a `() => null` server
+  // snapshot, so `user` reads as null on SSR and the first client render even
+  // when a profile exists in localStorage. Wait one effect tick before letting
+  // the onboarding overlay open so returning users don't see it flash on mount.
+  const [hydrated, setHydrated] = useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- post-mount hydration flag; React's canonical SSR-skew pattern
+  useEffect(() => setHydrated(true), []);
+  const onboardingOpen = hydrated && (manageMode || (user == null && !onboardingDismissed));
 
   // Global notification dispatcher — must live above the route tree so notifications
   // continue firing while the user is on any tab (or background-tab).

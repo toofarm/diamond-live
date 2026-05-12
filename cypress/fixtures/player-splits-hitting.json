@@ -1,0 +1,13 @@
+{
+  "season": 2026,
+  "mode": "hitting",
+  "splits": [
+    { "code": "vr",   "label": "vs RHP", "avg": ".301", "ops": ".895" },
+    { "code": "vl",   "label": "vs LHP", "avg": ".352", "ops": "1.121" },
+    { "code": "h",    "label": "Home",   "avg": ".340", "ops": "1.024" },
+    { "code": "a",    "label": "Away",   "avg": ".295", "ops": ".921" },
+    { "code": "d",    "label": "Day",    "avg": ".325", "ops": ".988" },
+    { "code": "n",    "label": "Night",  "avg": ".311", "ops": ".965" },
+    { "code": "risp", "label": "RISP",   "avg": ".362", "ops": "1.110" }
+  ]
+}

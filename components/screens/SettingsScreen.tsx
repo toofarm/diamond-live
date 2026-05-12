@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { TEAMS } from "@/lib/mlb/teams";
 import { AppBar, TeamBadge, Wordmark } from "@/components/ui/primitives";
-import { IconBell, IconChevron, IconClose } from "@/components/ui/icons";
+import { IconBell, IconChevron, IconClose, IconMoon, IconSun } from "@/components/ui/icons";
 import type {
   BoxScoreUnits,
   DisplayPrefs,
@@ -132,6 +132,15 @@ export function SettingsScreen({
         >
           + Manage teams
         </button>
+
+        {/* ── Appearance ───────────────────────────────────────── */}
+        <SectionLabel>Appearance</SectionLabel>
+        <AppearanceRow
+          theme={prefs.theme}
+          onToggle={() =>
+            onUpdatePrefs({ ...prefs, theme: prefs.theme === "twilight" ? "light" : "twilight" })
+          }
+        />
 
         {/* ── Alerts ───────────────────────────────────────────── */}
         <SectionLabel>Alerts</SectionLabel>
@@ -288,6 +297,35 @@ function Switch({
         }`}
       />
     </button>
+  );
+}
+
+function AppearanceRow({ theme, onToggle }: { theme: "light" | "twilight"; onToggle: () => void }) {
+  const isDark = theme === "twilight";
+  return (
+    <div className="bg-surface border border-line rounded-[14px] overflow-hidden">
+      <div className="flex items-center gap-3 px-3.5 py-3.5">
+        <div
+          className="w-9 h-9 rounded-[10px] border border-line flex items-center justify-center"
+          style={{ background: isDark ? "#0E0F11" : "#F3EFE7" }}
+        >
+          {isDark ? (
+            <IconMoon size={18} stroke="var(--color-ink)" />
+          ) : (
+            <IconSun size={18} stroke="var(--color-ink)" />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-head text-[15px] font-semibold text-ink tracking-[-0.2px]">
+            {isDark ? "Dark mode" : "Light mode"}
+          </div>
+          <div className="font-mono text-[11px] text-ink-3 tracking-[0.3px] mt-0.5">
+            {isDark ? "Twilight palette" : "Daylight palette"}
+          </div>
+        </div>
+        <Switch on={isDark} onClick={onToggle} ariaLabel="Toggle dark mode" />
+      </div>
+    </div>
   );
 }
 

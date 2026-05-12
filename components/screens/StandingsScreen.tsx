@@ -26,6 +26,8 @@ export function StandingsScreen({ onTeam }: { onTeam: (abbr: string) => void }) 
             {(["AL", "NL"] as const).map((l) => (
               <button
                 key={l}
+                data-cy="league-toggle"
+                data-cy-league={l}
                 onClick={() => setLeague(l)}
                 className={`px-3 py-[5px] rounded-full border-none cursor-pointer font-ui text-xs font-bold ${
                   league === l ? "bg-accent text-white" : "bg-transparent text-ink-2"
@@ -37,7 +39,7 @@ export function StandingsScreen({ onTeam }: { onTeam: (abbr: string) => void }) 
           </div>
         }
       />
-      <div className="bg-canvas px-[14px] md:px-6 pt-2 pb-[100px] max-w-[900px] w-full mx-auto">
+      <div data-cy="standings-screen" className="bg-canvas px-[14px] md:px-6 pt-2 pb-[100px] max-w-[900px] w-full mx-auto">
         {loading ? (
           <Loader />
         ) : error ? (
@@ -59,6 +61,8 @@ export function StandingsScreen({ onTeam }: { onTeam: (abbr: string) => void }) 
             {rows.map((row, i) => (
               <button
                 key={row.abbr}
+                data-cy="standings-row"
+                data-cy-team={row.abbr}
                 onClick={() => onTeam(row.abbr)}
                 className={`w-full grid items-center gap-2 px-3.5 py-2.5 border-none text-left cursor-pointer ${
                   i === 0

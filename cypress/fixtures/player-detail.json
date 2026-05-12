@@ -1,0 +1,31 @@
+{
+  "id": 596019,
+  "fullName": "Francisco Lindor",
+  "team": "NYM",
+  "position": "SS",
+  "bats": "S",
+  "throws": "R",
+  "num": "12",
+  "age": 32,
+  "height": "5' 11\"",
+  "weight": 190,
+  "birthCity": "Caguas",
+  "birthCountry": "Puerto Rico",
+  "hitting": {
+    "gamesPlayed": 38,
+    "atBats": 154,
+    "hits": 49,
+    "doubles": 11,
+    "triples": 1,
+    "homeRuns": 8,
+    "runs": 30,
+    "rbi": 27,
+    "baseOnBalls": 21,
+    "strikeOuts": 32,
+    "stolenBases": 6,
+    "avg": ".318",
+    "obp": ".403",
+    "slg": ".571",
+    "ops": ".974"
+  }
+}

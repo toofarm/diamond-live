@@ -27,6 +27,27 @@
   color-scheme: light;
 }
 
+/* Twilight palette — applied via [data-theme="twilight"] on <html>. Token names
+   mirror the @theme block above; Tailwind utilities that resolve to these
+   var(--color-*) values automatically pick up the override. */
+[data-theme="twilight"] {
+  color-scheme: dark;
+  --color-canvas:     #0E0F11;
+  --color-surface:    #17191C;
+  --color-surface-2:  #1F2125;
+  --color-ink:        #F2EFE8;
+  --color-ink-2:      #A39E92;
+  --color-ink-3:      #6A6559;
+  --color-line:       rgba(242, 239, 232, 0.10);
+  --color-line-2:     rgba(242, 239, 232, 0.05);
+  --color-accent:     #FF7A45;
+  --color-pos:        #42C284;
+  --color-neg:        #FF7A45;
+  --color-live:       #FF7A45;
+  --color-chip:       rgba(242, 239, 232, 0.08);
+  --color-overlay:    rgba(0, 0, 0, 0.6);
+}
+
 @layer base {
   html, body {
     height: 100%;
@@ -54,4 +75,53 @@
   background:
     radial-gradient(1200px 600px at 50% -10%, #e3dccd, transparent 60%),
     var(--color-canvas);
+}
+
+[data-theme="twilight"] .dl-app-root {
+  background:
+    radial-gradient(1200px 600px at 50% -10%, rgba(255, 122, 69, 0.06), transparent 60%),
+    var(--color-canvas);
+}
+
+/* Strike zone demarcations draw-in. Uses pathLength="1" on each line/rect so a
+   single normalized dasharray works for both the outer box and the inner grid. */
+@keyframes dl-zone-draw {
+  from { stroke-dashoffset: 1; }
+  to   { stroke-dashoffset: 0; }
+}
+.dl-zone-demarc {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: dl-zone-draw 420ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dl-zone-demarc {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Subtle expanding-halo pulse for the red dot inside LIVE indicators. The dot
+   itself stays solid; a same-color pseudo-element scales up over it and fades.
+   We animate transform + opacity rather than box-shadow because those properties
+   interpolate reliably across browsers, where color-mix() inside box-shadow does
+   not. */
+@keyframes dl-live-ping {
+  0%   { transform: scale(1);   opacity: 0.55; }
+  100% { transform: scale(2.6); opacity: 0;    }
+}
+.dl-live-pulse {
+  position: relative;
+}
+.dl-live-pulse::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--color-live);
+  animation: dl-live-ping 1.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dl-live-pulse::after { animation: none; opacity: 0; }
 }
