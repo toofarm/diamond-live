@@ -34,6 +34,8 @@ export function ScoreCard({
 
   return (
     <button
+      data-cy="score-card"
+      data-cy-game-id={game.id}
       onClick={onClick}
       className="block w-full text-left bg-surface border border-line rounded-[14px] px-4 pt-[14px] pb-3 cursor-pointer font-ui"
     >
@@ -44,16 +46,25 @@ export function ScoreCard({
               className="w-[7px] h-[7px] rounded-[4px] bg-live"
               style={{ boxShadow: "0 0 0 3px color-mix(in srgb, var(--color-live) 25%, transparent)" }}
             />
-            <span className="text-[11px] font-bold text-live tracking-widest uppercase">
+            <span
+              data-cy="score-card-status"
+              className="text-[11px] font-bold text-live tracking-widest uppercase"
+            >
               LIVE · {game.inningHalf} {game.inning}
             </span>
           </>
         ) : isFinal ? (
-          <span className="text-[11px] font-bold text-ink-2 tracking-widest uppercase">
+          <span
+            data-cy="score-card-status"
+            className="text-[11px] font-bold text-ink-2 tracking-widest uppercase"
+          >
             FINAL{game.inning && game.inning !== 9 ? ` / ${game.inning}` : ""}
           </span>
         ) : (
-          <span className="text-xs font-semibold text-ink-2 font-mono">
+          <span
+            data-cy="score-card-status"
+            className="text-xs font-semibold text-ink-2 font-mono"
+          >
             {game.time ?? game.statusDetail}
           </span>
         )}

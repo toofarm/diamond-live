@@ -1,0 +1,47 @@
+{
+  "season": 2026,
+  "leaders": {
+    "AVG": [
+      { "personId": 596019, "fullName": "Francisco Lindor",   "team": "NYM", "position": "SS", "value": ".342" },
+      { "personId": 660271, "fullName": "Pete Alonso",        "team": "NYM", "position": "1B", "value": ".321" },
+      { "personId": 547180, "fullName": "Bryce Harper",       "team": "PHI", "position": "1B", "value": ".318" },
+      { "personId": 624641, "fullName": "Kyle Schwarber",     "team": "PHI", "position": "DH", "value": ".311" },
+      { "personId": 656941, "fullName": "Trea Turner",        "team": "PHI", "position": "SS", "value": ".305" },
+      { "personId": 624413, "fullName": "Brandon Nimmo",      "team": "NYM", "position": "LF", "value": ".299" },
+      { "personId": 624415, "fullName": "Jeff McNeil",        "team": "NYM", "position": "2B", "value": ".294" },
+      { "personId": 645277, "fullName": "Mark Vientos",       "team": "NYM", "position": "3B", "value": ".289" },
+      { "personId": 670271, "fullName": "Mookie Betts",       "team": "LAD", "position": "RF", "value": ".286" },
+      { "personId": 605141, "fullName": "Mookie Wong",        "team": "BOS", "position": "CF", "value": ".284" },
+      { "personId": 605137, "fullName": "Juan Soto",          "team": "NYY", "position": "RF", "value": ".281" },
+      { "personId": 671096, "fullName": "Shohei Ohtani",      "team": "LAD", "position": "DH", "value": ".278" }
+    ],
+    "HR": [
+      { "personId": 624641, "fullName": "Kyle Schwarber",     "team": "PHI", "position": "DH", "value": "18" },
+      { "personId": 671096, "fullName": "Shohei Ohtani",      "team": "LAD", "position": "DH", "value": "16" },
+      { "personId": 660271, "fullName": "Pete Alonso",        "team": "NYM", "position": "1B", "value": "15" },
+      { "personId": 547180, "fullName": "Bryce Harper",       "team": "PHI", "position": "1B", "value": "13" },
+      { "personId": 605137, "fullName": "Juan Soto",          "team": "NYY", "position": "RF", "value": "12" }
+    ],
+    "ERA": [
+      { "personId": 605135, "fullName": "Kodai Senga",        "team": "NYM", "position": "P", "value": "2.18" },
+      { "personId": 554430, "fullName": "Zack Wheeler",       "team": "PHI", "position": "P", "value": "2.45" },
+      { "personId": 642547, "fullName": "Aaron Nola",         "team": "PHI", "position": "P", "value": "2.81" },
+      { "personId": 543037, "fullName": "Gerrit Cole",        "team": "NYY", "position": "P", "value": "2.96" },
+      { "personId": 657277, "fullName": "Logan Webb",         "team": "SF",  "position": "P", "value": "3.04" },
+      { "personId": 663556, "fullName": "Yoshinobu Yamamoto", "team": "LAD", "position": "P", "value": "3.10" },
+      { "personId": 666142, "fullName": "Spencer Strider",    "team": "ATL", "position": "P", "value": "3.18" },
+      { "personId": 656605, "fullName": "Tyler Glasnow",      "team": "LAD", "position": "P", "value": "3.22" },
+      { "personId": 669373, "fullName": "Matt Strahm",        "team": "PHI", "position": "P", "value": "3.28" },
+      { "personId": 666155, "fullName": "Pablo López",        "team": "MIN", "position": "P", "value": "3.31" },
+      { "personId": 624133, "fullName": "Reed Garrett",       "team": "NYM", "position": "P", "value": "3.35" },
+      { "personId": 605240, "fullName": "Carlos Rodón",       "team": "NYY", "position": "P", "value": "3.40" }
+    ],
+    "FPCT": [
+      { "personId": 596019, "fullName": "Francisco Lindor",   "team": "NYM", "position": "SS", "value": "1.000" },
+      { "personId": 660271, "fullName": "Pete Alonso",        "team": "NYM", "position": "1B", "value": ".998" },
+      { "personId": 547989, "fullName": "J.T. Realmuto",      "team": "PHI", "position": "C",  "value": ".996" },
+      { "personId": 642708, "fullName": "Francisco Alvarez",  "team": "NYM", "position": "C",  "value": ".994" },
+      { "personId": 656941, "fullName": "Trea Turner",        "team": "PHI", "position": "SS", "value": ".991" }
+    ]
+  }
+}

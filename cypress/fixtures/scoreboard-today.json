@@ -1,0 +1,69 @@
+{
+  "date": "2026-05-12",
+  "games": [
+    {
+      "id": 1,
+      "away": "NYM",
+      "home": "PHI",
+      "awayScore": 4,
+      "homeScore": 2,
+      "status": "LIVE",
+      "statusDetail": "In Progress",
+      "dateISO": "2026-05-12",
+      "inning": 7,
+      "inningHalf": "TOP",
+      "bases": [true, false, true],
+      "outs": 1,
+      "balls": 2,
+      "strikes": 1,
+      "pitchers": { "away": "Kodai Senga", "home": "Zack Wheeler" },
+      "broadcast": "SNY, NBC10",
+      "venue": "Citizens Bank Park"
+    },
+    {
+      "id": 2,
+      "away": "NYM",
+      "home": "ATL",
+      "awayScore": 3,
+      "homeScore": 5,
+      "status": "FINAL",
+      "statusDetail": "Final",
+      "dateISO": "2026-05-12",
+      "inning": 9,
+      "venue": "Truist Park"
+    },
+    {
+      "id": 3,
+      "away": "LAD",
+      "home": "SF",
+      "awayScore": null,
+      "homeScore": null,
+      "status": "SCHEDULED",
+      "statusDetail": "Scheduled",
+      "dateISO": "2026-05-12",
+      "time": "10:15 PM",
+      "pitchers": { "away": "Yoshinobu Yamamoto", "home": "Logan Webb" },
+      "broadcast": "SportsNet LA",
+      "venue": "Oracle Park"
+    },
+    {
+      "id": 4,
+      "away": "BOS",
+      "home": "NYY",
+      "awayScore": 1,
+      "homeScore": 0,
+      "status": "LIVE",
+      "statusDetail": "In Progress",
+      "dateISO": "2026-05-12",
+      "inning": 4,
+      "inningHalf": "BOT",
+      "bases": [false, true, false],
+      "outs": 2,
+      "balls": 1,
+      "strikes": 2,
+      "pitchers": { "away": "Brayan Bello", "home": "Carlos Rodón" },
+      "broadcast": "NESN, YES",
+      "venue": "Yankee Stadium"
+    }
+  ]
+}

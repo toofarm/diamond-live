@@ -23,6 +23,8 @@
 # misc
 .DS_Store
 *.pem
+.claude/
+
 
 # debug
 npm-debug.log*
@@ -43,3 +45,8 @@ next-env.d.ts
 # design handoff (extracted from zip — not part of the app)
 /handoff/
 /Baseball Test Spp-handoff.zip
+
+# cypress artifacts
+/cypress/videos/
+/cypress/screenshots/
+/cypress/downloads/

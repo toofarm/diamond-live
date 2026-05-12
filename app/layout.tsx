@@ -57,11 +57,22 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${head.variable} ${ui.variable} ${mono.variable}`}>
-      <head>
+    // suppressHydrationWarning: the boot <script> below sets data-theme on
+    // <html> before React hydrates, which would otherwise trip the attribute
+    // mismatch check on the root element.
+    <html
+      lang="en"
+      className={`${head.variable} ${ui.variable} ${mono.variable}`}
+      suppressHydrationWarning
+    >
+      <body>
+        {/* Inline boot script — top of body runs synchronously before any of
+            the React tree paints, and avoids the App Router hydration mismatch
+            that occurs when arbitrary <script> children are placed inside a
+            JSX <head>. */}
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
-      </head>
-      <body>{children}</body>
+        {children}
+      </body>
     </html>
   );
 }

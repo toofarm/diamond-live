@@ -81,7 +81,7 @@ export function ScheduleScreen({
   return (
     <>
       <AppBar title="Schedule" />
-      <div className="bg-canvas px-3.5 md:px-6 pt-2 pb-[100px] max-w-[900px] w-full mx-auto">
+      <div data-cy="schedule-screen" className="bg-canvas px-3.5 md:px-6 pt-2 pb-[100px] max-w-[900px] w-full mx-auto">
         <FilterToolbar
           scope={scope}
           setScope={setScope}
@@ -120,6 +120,7 @@ export function ScheduleScreen({
         )}
 
         <button
+          data-cy="show-past-toggle"
           onClick={() => setShowPast(!showPast)}
           className={`mt-3 w-full px-3 py-2.5 rounded-[12px] cursor-pointer flex items-center justify-center gap-2 font-ui text-xs font-semibold text-ink-2 tracking-[0.2px] border ${
             showPast ? "bg-chip border-line" : "bg-transparent border-dashed border-line"
@@ -240,6 +241,8 @@ function FilterToolbar({
           return (
             <button
               key={s.id}
+              data-cy="scope-tab"
+              data-cy-scope={s.id}
               onClick={() => {
                 if (s.id === "team" && !teamFilter) {
                   openPicker("team");
@@ -335,6 +338,8 @@ function ScheduleGameRow({
 
   return (
     <button
+      data-cy="schedule-game-row"
+      data-cy-game-id={game.id}
       onClick={() => onGame(game.id)}
       className={`w-full grid items-center gap-2 px-3.5 py-3 bg-transparent border-none cursor-pointer text-left ${
         isLast ? "" : "border-b border-line-2"
@@ -456,7 +461,7 @@ function TeamPicker({
   }, [q, exclude, follows]);
 
   return (
-    <div className="absolute inset-0 bg-canvas z-30 flex flex-col">
+    <div data-cy="team-picker" className="absolute inset-0 bg-canvas z-30 flex flex-col">
       <div className="px-4 pb-3 bg-surface border-b border-line-2 flex items-center gap-2.5 pt-[calc(env(safe-area-inset-top,0)+18px)]">
         <button
           onClick={onClose}

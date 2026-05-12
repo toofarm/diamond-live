@@ -135,7 +135,7 @@ export function GameDetail({
   };
 
   return (
-    <div className="absolute inset-0 bg-canvas flex flex-col z-10 overflow-hidden">
+    <div data-cy="game-detail" className="absolute inset-0 bg-canvas flex flex-col z-10 overflow-hidden">
       <div className="px-3.5 md:px-6 pb-2.5 bg-surface border-b border-line-2 pt-4">
         <div className="flex items-center">
           <BackChevron onClick={onBack} label="Scores" />
@@ -159,6 +159,7 @@ export function GameDetail({
         {game && (
           <div className="mt-3 px-1">
             <div
+              data-cy="hero-headline"
               aria-hidden={condensed}
               className="overflow-hidden transition-[height,opacity] duration-200 ease-out"
               style={{
@@ -232,6 +233,8 @@ export function GameDetail({
               return (
                 <button
                   key={t}
+                  data-cy="sub-tab"
+                  data-cy-tab={t}
                   onClick={() => setTab(t)}
                   className={`px-3.5 py-2 bg-transparent cursor-pointer shrink-0 capitalize font-ui text-[13px] border-b-2 ${on ? "text-ink font-bold border-accent" : "text-ink-2 font-medium border-transparent"
                     }`}
@@ -246,6 +249,7 @@ export function GameDetail({
 
       {data && (
         <div
+          data-cy="game-detail-scroll"
           onScroll={onScrollContent}
           className="flex-1 overflow-y-auto px-3.5 md:px-6 pt-3.5 pb-20 w-full max-w-275 mx-auto"
         >
@@ -288,6 +292,8 @@ function ScoreChip({
   const order = side === "away" ? "" : "flex-row-reverse";
   return (
     <div
+      data-cy="score-chip"
+      data-cy-side={side}
       aria-hidden={!visible}
       className={`flex items-center gap-2 overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 ease-out ${order} ${visible ? "max-w-[120px] opacity-100" : "max-w-0 opacity-0"
         }`}
@@ -729,6 +735,8 @@ function BoxSection({
         {lineup.map((r) => (
           <button
             key={r.id}
+            data-cy="box-player-row"
+            data-cy-player-id={r.id}
             onClick={() => onPlayer(r.id)}
             className="w-full grid items-center px-3.5 py-2 bg-transparent border-none cursor-pointer text-left border-b border-line-2"
             style={{ gridTemplateColumns: "1.6fr 24px 24px 24px 24px 24px 24px 40px" }}
@@ -764,6 +772,8 @@ function BoxSection({
         {pitching.map((r) => (
           <button
             key={r.id}
+            data-cy="box-player-row"
+            data-cy-player-id={r.id}
             onClick={() => onPlayer(r.id)}
             className="w-full grid items-center px-3.5 py-2 bg-transparent border-none cursor-pointer text-left border-b border-line-2"
             style={{ gridTemplateColumns: "1.6fr 32px 24px 24px 24px 24px 24px" }}
@@ -800,7 +810,7 @@ function PlaysTab({ plays }: { plays: Play[] }) {
         >
           <span className="font-mono text-[10px] text-ink-3 tracking-[0.5px]">{p.half}</span>
           {p.tag ? (
-            <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded-[4px] bg-accent text-white w-fit">
+            <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded-sm bg-accent text-white w-fit">
               {p.tag}
             </span>
           ) : (
@@ -1002,6 +1012,7 @@ function BatterPicker({
     <label className="relative block w-full">
       <span className="sr-only">Choose batter</span>
       <select
+        data-cy="batter-picker"
         value={String(selectedId)}
         onChange={(e) => onSelect(Number(e.target.value))}
         className="w-full appearance-none cursor-pointer bg-surface border border-line rounded-xl pl-3.5 pr-9 py-2.5 font-head text-[14px] font-semibold text-ink tracking-[-0.2px] focus:outline-none focus:border-accent"

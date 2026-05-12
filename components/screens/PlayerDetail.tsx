@@ -132,7 +132,7 @@ export function PlayerDetail({
   const mode: StatMode = data ? detectMode(data) : "hitting";
 
   return (
-    <div className="absolute inset-0 bg-canvas flex flex-col z-10 overflow-hidden">
+    <div data-cy="player-detail" className="absolute inset-0 bg-canvas flex flex-col z-10 overflow-hidden">
       <PlayerHero data={data} team={team} onBack={onBack} onTeam={onTeam} loading={loading} />
 
       {data && <TabNav tab={tab} setTab={setTab} />}
@@ -181,6 +181,7 @@ function PlayerHero({
           <>
             {data.team && team && (
               <button
+                data-cy="player-team-chip"
                 onClick={() => onTeam(data.team!)}
                 className="mt-2 inline-flex items-center gap-1.5 bg-transparent rounded-full px-3 py-1 cursor-pointer font-ui text-[11px] font-semibold uppercase tracking-[0.4px] text-ink"
                 style={{
@@ -241,6 +242,8 @@ function TabNav({ tab, setTab }: { tab: SubTab; setTab: (t: SubTab) => void }) {
           return (
             <button
               key={t.id}
+              data-cy="sub-tab"
+              data-cy-tab={t.id}
               onClick={() => setTab(t.id)}
               className={`px-3.5 md:px-4 py-3 bg-transparent cursor-pointer shrink-0 font-ui text-[13px] transition-colors ${on ? "text-ink font-bold border-b-2 border-accent" : "text-ink-2 font-medium border-b-2 border-transparent hover:text-ink"
                 }`}
@@ -303,7 +306,7 @@ function SeasonTab({ data }: { data: PlayerDetailData }) {
 
 function HeadlineTile({ label, value }: { label: string; value: string | number | undefined }) {
   return (
-    <div className="bg-surface border border-line rounded-[10px] px-2 pt-2 pb-2.5 text-center">
+    <div data-cy="headline-tile" className="bg-surface border border-line rounded-[10px] px-2 pt-2 pb-2.5 text-center">
       <div className="text-[10px] font-bold tracking-[1.2px] uppercase text-accent">{label}</div>
       <div className="mt-1 font-head text-[22px] md:text-[24px] font-bold text-ink tracking-[-0.5px]">
         <StatValue value={value} />
@@ -418,6 +421,7 @@ function SplitsTab({ personId, mode }: { personId: number; mode: StatMode }) {
           {rows.map((r, i) => (
             <div
               key={r.code}
+              data-cy="splits-row"
               className={`grid items-center px-3.5 md:px-4 py-3 ${
                 i === rows.length - 1 ? "" : "border-b border-line-2"
               }`}
@@ -485,6 +489,7 @@ function GamelogTab({ personId, mode }: { personId: number; mode: StatMode }) {
               {rows.map((g, i) => (
                 <div
                   key={g.date}
+                  data-cy="gamelog-row"
                   className={`grid items-center px-3.5 md:px-4 py-3 ${
                     i === rows.length - 1 ? "" : "border-b border-line-2"
                   }`}
@@ -516,6 +521,7 @@ function GamelogTab({ personId, mode }: { personId: number; mode: StatMode }) {
               {rows.map((g, i) => (
                 <div
                   key={g.date}
+                  data-cy="gamelog-row"
                   className={`grid items-center px-3.5 md:px-4 py-3 ${
                     i === rows.length - 1 ? "" : "border-b border-line-2"
                   }`}
@@ -605,6 +611,7 @@ function HistoryTab({ personId, mode }: { personId: number; mode: StatMode }) {
               {years.map((y) => (
                 <div
                   key={`${y.year}-${y.team}`}
+                  data-cy="history-year"
                   className="grid items-center px-3.5 md:px-4 py-2.5 border-b border-line-2"
                   style={{ gridTemplateColumns: tableCols }}
                 >
@@ -650,6 +657,7 @@ function HistoryTab({ personId, mode }: { personId: number; mode: StatMode }) {
               {years.map((y) => (
                 <div
                   key={`${y.year}-${y.team}`}
+                  data-cy="history-year"
                   className="grid items-center px-3.5 md:px-4 py-2.5 border-b border-line-2"
                   style={{ gridTemplateColumns: tableCols }}
                 >
