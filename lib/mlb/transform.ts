@@ -435,8 +435,9 @@ export function mapGameDetail(feed: any, dateISO?: string): GameDetailData {
   const homeLineup = mapBoxLineup(box?.teams?.home);
   const allPlays = (live?.plays?.allPlays ?? []) as any[];
   const usageByPitcher = computePitchUsageByPitcher(allPlays);
-  const awayPitching = decoratePitching(mapBoxPitching(box?.teams?.away), usageByPitcher);
-  const homePitching = decoratePitching(mapBoxPitching(box?.teams?.home), usageByPitcher);
+  const gameIsLive = status === "LIVE";
+  const awayPitching = decoratePitching(mapBoxPitching(box?.teams?.away), usageByPitcher, gameIsLive);
+  const homePitching = decoratePitching(mapBoxPitching(box?.teams?.home), usageByPitcher, gameIsLive);
 
   const atBat = status === "LIVE" ? mapAtBat(feed) : null;
   const winProbability = readWinProbability(live);
@@ -594,12 +595,15 @@ function computePitchUsageByPitcher(allPlays: any[]): Map<number, Record<string,
 }
 
 /**
- * Attach `pitchUsage` (from the play-events tally) and mark the last entry as
- * `live` — that's the team's currently-pitching or most-recently-pitched arm.
+ * Attach `pitchUsage` (from the play-events tally) and — for in-progress games
+ * only — flag the team's most recent pitcher as `live`. Final/scheduled games
+ * leave `live` undefined so the UI doesn't pin a "LIVE" tag on a closer who
+ * recorded the last out hours ago.
  */
 function decoratePitching(
   rows: import("./types").BoxPitchingRow[],
   usageByPitcher: Map<number, Record<string, number>>,
+  gameIsLive: boolean,
 ): import("./types").BoxPitchingRow[] {
   if (rows.length === 0) return rows;
   return rows.map((row, i) => {
@@ -607,7 +611,7 @@ function decoratePitching(
     const pitchUsage = counts
       ? Object.entries(counts).map(([type, count]) => ({ type, count }))
       : undefined;
-    const live = i === rows.length - 1 ? true : undefined;
+    const live = gameIsLive && i === rows.length - 1 ? true : undefined;
     return { ...row, pitchUsage, live };
   });
 }

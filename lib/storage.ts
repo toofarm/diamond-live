@@ -8,9 +8,9 @@
 
 import { useSyncExternalStore } from "react";
 
-const KEY = "dl_user";
 
 export type BoxScoreUnits = "imperial" | "metric";
+export type Theme = "light" | "twilight";
 
 export interface NotificationPrefs {
   /** User's in-app intent. Browser permission is gated separately via Notification.permission. */
@@ -26,6 +26,7 @@ export interface DisplayPrefs {
   boxScoreUnits: BoxScoreUnits;
   winProbability: boolean;
   pitchByPitch: boolean;
+  theme: Theme;
 }
 
 export interface UserProfile {
@@ -44,12 +45,16 @@ export const DEFAULT_PREFS: DisplayPrefs = {
   boxScoreUnits: "imperial",
   winProbability: true,
   pitchByPitch: true,
+  theme: "light",
 };
+
+/** localStorage key used by the pre-hydration boot script in app/layout.tsx. */
+export const STORAGE_KEY = "dl_user";
 
 function readFromStorage(): UserProfile | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(KEY);
+    const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<UserProfile>;
     if (typeof parsed?.name !== "string" || !Array.isArray(parsed?.follows)) return null;
@@ -66,6 +71,7 @@ function readFromStorage(): UserProfile | null {
       boxScoreUnits:   parsed.prefs?.boxScoreUnits === "metric" ? "metric" : "imperial",
       winProbability:  parsed.prefs?.winProbability  ?? DEFAULT_PREFS.winProbability,
       pitchByPitch:    parsed.prefs?.pitchByPitch    ?? DEFAULT_PREFS.pitchByPitch,
+      theme:           parsed.prefs?.theme === "twilight" ? "twilight" : "light",
     };
     return {
       name: parsed.name,
@@ -94,7 +100,7 @@ function getSnapshot(): UserProfile | null {
 function subscribe(cb: () => void): () => void {
   listeners.add(cb);
   const onStorage = (e: StorageEvent) => {
-    if (e.key === KEY) {
+    if (e.key === STORAGE_KEY) {
       cached = readFromStorage();
       listeners.forEach((l) => l());
     }
@@ -119,7 +125,7 @@ export function saveUser(user: UserProfile): void {
   cacheInitialized = true;
   if (typeof window !== "undefined") {
     try {
-      window.localStorage.setItem(KEY, JSON.stringify(user));
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
     } catch {
       /* localStorage may be disabled — silently ignore */
     }
@@ -132,7 +138,7 @@ export function clearUser(): void {
   cacheInitialized = true;
   if (typeof window !== "undefined") {
     try {
-      window.localStorage.removeItem(KEY);
+      window.localStorage.removeItem(STORAGE_KEY);
     } catch {
       /* ignore */
     }

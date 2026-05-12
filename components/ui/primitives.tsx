@@ -94,9 +94,8 @@ export function TeamBadge({ abbr, size = 28 }: { abbr: string; size?: number }) 
           decoding="async"
           onLoad={() => setStatus("loaded")}
           onError={() => setStatus("error")}
-          className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-200 ${
-            status === "loaded" ? "opacity-100" : "opacity-0"
-          }`}
+          className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-200 ${status === "loaded" ? "opacity-100" : "opacity-0"
+            }`}
         />
       )}
     </div>
@@ -214,7 +213,7 @@ export function Wordmark() {
       <Link href="/" className="flex flex-row items-center gap-2 no-underline text-inherit">
         <BaseballMark />
         <div className="font-head font-bold text-[18px] text-ink tracking-[-0.5px]">
-          Diamond<span className="text-accent">·</span>Live
+          Game<span className="text-accent">·</span>State
         </div>
       </Link>
     </div>

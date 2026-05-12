@@ -33,6 +33,19 @@ export default function ShellLayout({ children }: { children: React.ReactNode })
   const user = useUser();
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const [manageMode, setManageMode] = useState(false);
+
+  // Keep the <html data-theme> attribute in lockstep with the user's theme
+  // preference so toggles in Settings apply without a reload. The initial
+  // value is set pre-hydration by the boot script in app/layout.tsx.
+  const theme = user?.prefs?.theme;
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (theme === "twilight") {
+      document.documentElement.setAttribute("data-theme", "twilight");
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+    }
+  }, [theme]);
   // `useUser` is backed by useSyncExternalStore with a `() => null` server
   // snapshot, so `user` reads as null on SSR and the first client render even
   // when a profile exists in localStorage. Wait one effect tick before letting
