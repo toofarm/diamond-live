@@ -1,0 +1,661 @@
+"use client";
+
+import { useState } from "react";
+import { useApi } from "@/lib/mlb/client";
+import type { AtBat, BoxLineupRow, BoxPitchingRow, GameDetailData, Pitch, Play } from "@/lib/mlb/types";
+import { TEAMS } from "@/lib/mlb/teams";
+import { BackChevron, TeamBadge, BaseDiamond, Loader, OutDots } from "@/components/ui/primitives";
+import { DEFAULT_PREFS, useUser, type BoxScoreUnits } from "@/lib/storage";
+
+/** Format pitch velocity in the user's preferred units. Returns the value + label. */
+function formatVelo(mph: number, units: BoxScoreUnits): { value: string; label: string } {
+  if (units === "metric") {
+    const kph = mph * 1.609344;
+    return { value: kph > 0 ? kph.toFixed(1) : "—", label: "KM/H" };
+  }
+  return { value: mph > 0 ? mph.toFixed(1) : "—", label: "MPH" };
+}
+
+type SubTab = "summary" | "box" | "plays" | "pitches";
+
+const PITCH_RESULT_COLORS: Record<Pitch["result"], { fill: string; ink: string; label: string }> = {
+  ball: { fill: "#1F8F4F", ink: "#fff", label: "Ball" },
+  strike: { fill: "#C73E1D", ink: "#fff", label: "Strike" },
+  "foul-2k": { fill: "#8A8077", ink: "#fff", label: "Foul" },
+  inplay: { fill: "#2F6BD9", ink: "#fff", label: "In play" },
+};
+
+const PITCH_TYPE_NAMES: Record<string, string> = {
+  FF: "4-Seam", SI: "Sinker", SL: "Slider",
+  CB: "Curve", CU: "Curve", CH: "Change",
+  CT: "Cutter", FC: "Cutter", FS: "Splitter",
+  KC: "Knuckle", EP: "Eephus", FO: "Forkball",
+};
+
+function ord(n?: number) {
+  if (!n) return "";
+  return n === 1 ? "st" : n === 2 ? "nd" : n === 3 ? "rd" : "th";
+}
+
+export function GameDetail({
+  gameId,
+  onBack,
+  onPlayer,
+  onTeam,
+}: {
+  gameId: number;
+  onBack: () => void;
+  onPlayer: (id: number) => void;
+  onTeam: (abbr: string) => void;
+}) {
+  const { data, loading, error } = useApi<GameDetailData>(`/api/mlb/game/${gameId}`, { pollMs: 15_000 });
+  const [tab, setTab] = useState<SubTab>("summary");
+
+  const user = useUser();
+  const prefs = user?.prefs ?? DEFAULT_PREFS;
+  const subTabs = (prefs.pitchByPitch
+    ? ["summary", "box", "plays", "pitches"]
+    : ["summary", "box", "plays"]) as SubTab[];
+
+  const game = data?.summary;
+  const isLive = game?.status === "LIVE";
+
+  // If the user disables pitch-by-pitch while viewing it, fall back to summary.
+  if (!prefs.pitchByPitch && tab === "pitches") {
+    setTab("summary");
+  }
+
+  return (
+    <div className="absolute inset-0 bg-canvas flex flex-col z-10 overflow-hidden">
+      <div className="px-3.5 md:px-6 pb-2.5 bg-surface border-b border-line-2 pt-4">
+        <div className="flex items-center">
+          <BackChevron onClick={onBack} label="Scores" />
+          <div className="flex-1" />
+          {isLive && (
+            <span
+              className="text-[10px] font-bold text-live tracking-widest px-2 py-0.5 rounded-full"
+              style={{
+                background: "color-mix(in srgb, var(--color-live) 12%, transparent)",
+                border: "1px solid color-mix(in srgb, var(--color-live) 40%, transparent)",
+              }}
+            >
+              ● LIVE
+            </span>
+          )}
+        </div>
+
+        {loading && !game && <Loader />}
+        {error && <div className="p-6 text-neg">Failed to load game.</div>}
+
+        {game && (
+          <div className="mt-3 px-1">
+            <div className="flex items-center gap-3.5">
+              <TeamColumn abbr={game.away} onTeam={onTeam} />
+              <div className="flex-[1.2] text-center">
+                <div className="font-head text-[42px] font-bold text-ink tracking-[-1.5px] leading-none">
+                  <span>{game.awayScore ?? 0}</span>
+                  <span className="text-ink-3 mx-2">–</span>
+                  <span>{game.homeScore ?? 0}</span>
+                </div>
+                <div
+                  className={`mt-2 text-[11px] font-bold tracking-[1.2px] font-ui uppercase ${isLive ? "text-live" : "text-ink-2"
+                    }`}
+                >
+                  {isLive
+                    ? `${game.inningHalf ?? ""} ${game.inning ?? ""}${ord(game.inning)}`
+                    : game.status === "FINAL"
+                      ? "FINAL"
+                      : game.time ?? game.statusDetail}
+                </div>
+              </div>
+              <TeamColumn abbr={game.home} onTeam={onTeam} />
+            </div>
+
+            {isLive && (
+              <div className="mt-3.5 flex items-center justify-center gap-[18px] py-2 border-t border-line-2">
+                <BaseDiamond bases={game.bases ?? [false, false, false]} size={32} />
+                <div className="font-mono text-[13px] text-ink">
+                  <span className="font-semibold">
+                    {game.balls ?? 0}-{game.strikes ?? 0}
+                  </span>
+                  <span className="text-ink-3 text-[9px] ml-1">B-K</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <OutDots outs={game.outs ?? 0} />
+                  <span className="text-[10px] text-ink-3 font-mono">OUTS</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {data && (
+          <div className="mt-2.5 flex overflow-x-auto">
+            {subTabs.map((t) => {
+              const on = tab === t;
+              return (
+                <button
+                  key={t}
+                  onClick={() => setTab(t)}
+                  className={`px-3.5 py-2 bg-transparent cursor-pointer shrink-0 capitalize font-ui text-[13px] border-b-2 ${on ? "text-ink font-bold border-accent" : "text-ink-2 font-medium border-transparent"
+                    }`}
+                >
+                  {t}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {data && (
+        <div className="flex-1 overflow-y-auto px-3.5 md:px-6 pt-3.5 pb-20 w-full max-w-275 mx-auto">
+          {tab === "summary" && <SummaryTab data={data} onPlayer={onPlayer} units={prefs.boxScoreUnits} />}
+          {tab === "box" && <BoxTab data={data} onPlayer={onPlayer} />}
+          {tab === "plays" && <PlaysTab plays={data.plays} />}
+          {tab === "pitches" && <PitchesTab data={data} units={prefs.boxScoreUnits} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TeamColumn({ abbr, onTeam }: { abbr: string; onTeam: (abbr: string) => void }) {
+  const t = TEAMS[abbr];
+  return (
+    <div className="flex-1 flex flex-col items-center gap-1">
+      <TeamBadge abbr={abbr} size={42} />
+      <button
+        onClick={() => onTeam(abbr)}
+        className="bg-transparent border-none cursor-pointer font-head text-[15px] font-bold text-ink tracking-[-0.2px]"
+      >
+        {t?.city ?? abbr}
+      </button>
+    </div>
+  );
+}
+
+/* ── Summary tab ──────────────────────────────────────────────── */
+
+function SummaryTab({ data, onPlayer, units }: { data: GameDetailData; onPlayer: (id: number) => void; units: BoxScoreUnits }) {
+  const { summary, linescore, plays, atBat } = data;
+  return (
+    <div className="flex flex-col gap-3.5">
+      {atBat && <AtBatCard ab={atBat} onPlayer={onPlayer} units={units} />}
+
+      {linescore && (
+        <div className="bg-surface border border-line rounded-[14px] px-1 py-3 overflow-x-auto">
+          <div
+            className="grid items-center font-mono text-xs pb-1.5 border-b border-line-2 text-ink-3"
+            style={{
+              gridTemplateColumns: `40px repeat(${linescore.innings.length}, 1fr) 26px 26px 26px`,
+            }}
+          >
+            <div />
+            {linescore.innings.map((_, i) => (
+              <div key={i} className="text-center">{i + 1}</div>
+            ))}
+            <div className="text-center text-ink-2 font-bold">R</div>
+            <div className="text-center text-ink-2 font-bold">H</div>
+            <div className="text-center text-ink-2 font-bold">E</div>
+          </div>
+          {(["away", "home"] as const).map((side, idx) => {
+            const abbr = side === "away" ? summary.away : summary.home;
+            const tot = linescore.totals[side];
+            return (
+              <div
+                key={side}
+                className={`grid items-center py-2 ${idx === 1 ? "border-t border-line-2" : ""}`}
+                style={{
+                  gridTemplateColumns: `40px repeat(${linescore.innings.length}, 1fr) 26px 26px 26px`,
+                }}
+              >
+                <div className="pl-2 flex items-center gap-1.5">
+                  <TeamBadge abbr={abbr} size={22} />
+                </div>
+                {linescore.innings.map((inn, i) => (
+                  <div
+                    key={i}
+                    className={`text-center font-mono text-[13px] font-semibold ${inn[side] == null ? "text-ink-3" : "text-ink"
+                      }`}
+                  >
+                    {inn[side] == null ? "·" : inn[side]}
+                  </div>
+                ))}
+                <div className="text-center font-mono text-[13px] font-bold text-accent">{tot.r}</div>
+                <div className="text-center font-mono text-[13px] text-ink">{tot.h}</div>
+                <div className="text-center font-mono text-[13px] text-ink">{tot.e}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="bg-surface border border-line rounded-[14px] p-3.5">
+        <div className="text-[10px] tracking-[1.2px] uppercase text-ink-3 font-bold mb-2.5">
+          Recent
+        </div>
+        {plays.length === 0 && <div className="text-ink-3 text-[13px]">No plays yet.</div>}
+        <div className="flex flex-col gap-2">
+          {plays.slice(0, 4).map((p, i) => (
+            <div key={i} className="flex items-start gap-2.5">
+              <span className="font-mono text-[10px] text-ink-3 w-11.5 shrink-0 pt-0.75">
+                {p.half}
+              </span>
+              {p.tag && (
+                <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded-sm bg-accent text-white shrink-0 mt-0.5">
+                  {p.tag}
+                </span>
+              )}
+              <div className="flex-1 text-[13px] text-ink leading-snug">{p.desc}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {(summary.venue || summary.weather) && (
+        <div className="bg-surface border border-line rounded-[14px] p-3.5 text-xs text-ink-2 font-ui leading-relaxed">
+          {summary.venue && (
+            <div>
+              <strong className="text-ink">Venue.</strong> {summary.venue}
+            </div>
+          )}
+          {summary.weather && (
+            <div>
+              <strong className="text-ink">Weather.</strong> {summary.weather}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── At-Bat card ──────────────────────────────────────────────── */
+
+function AtBatCard({ ab, onPlayer, units }: { ab: AtBat; onPlayer: (id: number) => void; units: BoxScoreUnits }) {
+  return (
+    <div className="bg-surface border border-line rounded-[14px] overflow-hidden">
+      <div className="px-3.5 py-2.5 flex items-center gap-2 border-b border-line-2">
+        <span className="w-1.5 h-1.5 rounded-[3px] bg-live" />
+        <span className="text-[10px] tracking-[1.2px] text-ink font-extrabold uppercase">At Bat</span>
+        <span className="font-mono text-[11px] text-ink-3 ml-1.5">{ab.inningLabel}</span>
+        <div className="flex-1" />
+        <span className="font-mono text-[11px] text-ink-3">
+          <span className="text-ink font-bold">{ab.pitcher.pitchCountGame}</span> pitches
+        </span>
+      </div>
+
+      <div
+        className="grid items-center gap-2 p-3.5 border-b border-line-2"
+        style={{ gridTemplateColumns: "1fr 76px 1fr" }}
+      >
+        <button
+          onClick={() => onPlayer(ab.pitcher.id)}
+          className="text-left bg-transparent border-none cursor-pointer p-0 flex flex-col gap-0.5"
+        >
+          <div className="text-[9px] tracking-widest text-ink-3 font-bold uppercase font-ui">
+            P · {ab.pitcher.hand}HP
+          </div>
+          <div className="font-head text-[17px] font-bold text-ink tracking-[-0.4px] leading-[1.1]">
+            {ab.pitcher.lastName}
+          </div>
+          <div className="font-mono text-[11px] text-ink-2 mt-0.5">
+            <span className="text-ink font-bold">{ab.pitcher.today.ip} IP</span>
+            <span className="text-ink-3"> · </span>
+            <span className="tracking-[0.4px]">
+              {ab.pitcher.today.k}K {ab.pitcher.today.bb}BB {ab.pitcher.today.er}ER
+            </span>
+          </div>
+        </button>
+
+        <div className="flex flex-col items-center gap-0.5">
+          <div className="font-head text-2xl font-bold text-ink tracking-[-1px] leading-none">
+            {ab.count.b}–{ab.count.s}
+          </div>
+          <div className="text-[8px] tracking-widest text-ink-3 font-bold uppercase">B / K</div>
+          <div className="mt-1 flex items-center gap-1">
+            <OutDots outs={ab.outs} />
+            <span className="text-[8px] text-ink-3 font-mono tracking-[0.4px]">OUT</span>
+          </div>
+        </div>
+
+        <button
+          onClick={() => onPlayer(ab.batter.id)}
+          className="text-right bg-transparent border-none cursor-pointer p-0 flex flex-col gap-0.5 items-end"
+        >
+          <div className="text-[9px] tracking-widest text-ink-3 font-bold uppercase font-ui">
+            AB · {ab.batter.hand}HB
+          </div>
+          <div className="font-head text-[17px] font-bold text-ink tracking-[-0.4px] leading-[1.1]">
+            {ab.batter.lastName}
+          </div>
+          <div className="font-mono text-[11px] text-ink-2 mt-0.5">
+            <span className="text-ink font-bold">{ab.batter.today.line}</span>
+            {ab.batter.seasonAvg && (
+              <>
+                <span className="text-ink-3"> · </span>
+                <span>{ab.batter.seasonAvg}</span>
+              </>
+            )}
+          </div>
+        </button>
+      </div>
+
+      <div className="p-3.5">
+        <StrikeZoneViz pitches={ab.pitches} hand={ab.batter.hand} units={units} />
+      </div>
+
+      {ab.pitches.length > 0 && (
+        <div className="border-t border-line-2">
+          <div className="px-3.5 pt-2 pb-1.5 flex items-center gap-2.5">
+            <span className="text-[9px] tracking-[1.4px] text-ink-3 font-extrabold uppercase">
+              Pitch Log
+            </span>
+            <div className="flex-1 h-px bg-line-2" />
+            <span className="font-mono text-[10px] text-ink-3">{ab.pitches.length} pitches</span>
+          </div>
+          <PitchTicker pitches={ab.pitches} units={units} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StrikeZoneViz({ pitches, hand, units }: { pitches: Pitch[]; hand: "L" | "R"; units: BoxScoreUnits }) {
+  const W = 280;
+  const H = 280;
+  const cx = W / 2;
+  const cy = 130;
+  const zw = 120;
+  const zh = 140;
+  const sx = (x: number) => cx + x * (zw / 2);
+  const sy = (y: number) => cy - y * (zh / 2);
+  const zoneL = cx - zw / 2;
+  const zoneR = cx + zw / 2;
+  const zoneT = cy - zh / 2;
+  const zoneB = cy + zh / 2;
+
+  const plateY = cy + zh / 2 + 50;
+  const plateW = 80;
+  const plate = [
+    [cx - plateW / 2, plateY],
+    [cx + plateW / 2, plateY],
+    [cx + plateW / 2, plateY + 14],
+    [cx, plateY + 28],
+    [cx - plateW / 2, plateY + 14],
+  ]
+    .map((p) => p.join(","))
+    .join(" ");
+
+  return (
+    <div className="relative flex justify-center">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-[320px] h-auto block">
+        <rect x={zoneL - 18} y={zoneT - 18} width={zw + 36} height={zh + 36} fill="var(--color-chip)" opacity={0.5} rx="3" />
+        <rect x={zoneL} y={zoneT} width={zw} height={zh} fill="var(--color-surface)" stroke="var(--color-ink-2)" strokeWidth="1.5" />
+        <line x1={zoneL + zw / 3} y1={zoneT} x2={zoneL + zw / 3} y2={zoneB} stroke="var(--color-line)" strokeWidth="0.75" />
+        <line x1={zoneL + (2 * zw) / 3} y1={zoneT} x2={zoneL + (2 * zw) / 3} y2={zoneB} stroke="var(--color-line)" strokeWidth="0.75" />
+        <line x1={zoneL} y1={zoneT + zh / 3} x2={zoneR} y2={zoneT + zh / 3} stroke="var(--color-line)" strokeWidth="0.75" />
+        <line x1={zoneL} y1={zoneT + (2 * zh) / 3} x2={zoneR} y2={zoneT + (2 * zh) / 3} stroke="var(--color-line)" strokeWidth="0.75" />
+
+        <text x={zoneL - 6} y={zoneT - 6} fontSize="8" fill="var(--color-ink-3)" fontFamily="var(--font-mono)" letterSpacing="0.5" textAnchor="end">
+          HIGH
+        </text>
+        <text x={zoneL - 6} y={zoneB + 14} fontSize="8" fill="var(--color-ink-3)" fontFamily="var(--font-mono)" letterSpacing="0.5" textAnchor="end">
+          LOW
+        </text>
+        <text
+          x={hand === "R" ? zoneR + 8 : zoneL - 8}
+          y={cy + 4}
+          fontSize="9"
+          fontFamily="var(--font-mono)"
+          fill="var(--color-ink-2)"
+          letterSpacing="0.5"
+          textAnchor={hand === "R" ? "start" : "end"}
+        >
+          {hand}HB
+        </text>
+
+        <polygon points={plate} fill="var(--color-surface-2)" stroke="var(--color-ink-2)" strokeWidth="1" />
+        <text x={cx} y={plateY + 46} fontSize="8" fill="var(--color-ink-3)" fontFamily="var(--font-mono)" letterSpacing="0.6" textAnchor="middle">
+          CATCHER VIEW
+        </text>
+
+        {pitches.map((p) => {
+          const px = sx(p.x);
+          const py = sy(p.y);
+          const c = PITCH_RESULT_COLORS[p.result];
+          return (
+            <g key={p.n}>
+              <circle cx={px} cy={py} r="10" fill={c.fill} stroke="var(--color-surface)" strokeWidth="1.5" />
+              <text x={px} y={py + 3} textAnchor="middle" fontSize="9" fontWeight="700" fontFamily="var(--font-mono)" fill={c.ink} letterSpacing="-0.3">
+                {Math.round(units === "metric" ? p.velo * 1.609344 : p.velo)}
+              </text>
+              <circle cx={px + 8.5} cy={py - 8.5} r="5.5" fill="var(--color-ink)" stroke="var(--color-surface)" strokeWidth="1.25" />
+              <text x={px + 8.5} y={py - 6.5} textAnchor="middle" fontSize="7" fontWeight="700" fontFamily="var(--font-mono)" fill="var(--color-surface)">
+                {p.n}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+function PitchTicker({ pitches, units }: { pitches: Pitch[]; units: BoxScoreUnits }) {
+  return (
+    <div className="flex flex-col">
+      {[...pitches].reverse().map((p, i) => {
+        const c = PITCH_RESULT_COLORS[p.result];
+        const typeName = PITCH_TYPE_NAMES[p.type] || p.type || "—";
+        return (
+          <div
+            key={p.n}
+            className={`grid items-center gap-2.5 px-3.5 py-2 ${i === 0 ? "" : "border-t border-line-2"}`}
+            style={{ gridTemplateColumns: "24px 36px 1fr auto auto" }}
+          >
+            <div className="w-[22px] h-[22px] rounded-[5px] bg-chip text-ink-2 flex items-center justify-center font-mono text-[11px] font-bold">
+              {p.n}
+            </div>
+            <div className="flex items-center gap-1">
+              <span
+                className="w-3.5 h-3.5 rounded-[7px] inline-block"
+                style={{ background: c.fill }}
+              />
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="font-head text-[13px] font-bold text-ink tracking-[-0.2px]">
+                {typeName}
+              </span>
+              <span className="font-mono text-[11px] text-ink-3">{p.type}</span>
+            </div>
+            <div className="font-mono text-[13px] font-bold text-ink tracking-[-0.3px] min-w-12.5 text-right">
+              {(() => { const v = formatVelo(p.velo, units); return <>{v.value}<span className="text-[9px] text-ink-3 font-medium ml-0.5">{v.label}</span></>; })()}
+            </div>
+            <div className="font-ui text-xs text-ink-2 min-w-23 text-right">{p.label}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── Box tab ──────────────────────────────────────────────────── */
+
+function BoxTab({ data, onPlayer }: { data: GameDetailData; onPlayer: (id: number) => void }) {
+  const { summary, awayLineup, homeLineup, awayPitching, homePitching } = data;
+  return (
+    <div className="flex flex-col gap-3.5">
+      <BoxSection abbr={summary.away} lineup={awayLineup} pitching={awayPitching} onPlayer={onPlayer} />
+      <BoxSection abbr={summary.home} lineup={homeLineup} pitching={homePitching} onPlayer={onPlayer} />
+    </div>
+  );
+}
+
+function BoxSection({
+  abbr,
+  lineup,
+  pitching,
+  onPlayer,
+}: {
+  abbr: string;
+  lineup: BoxLineupRow[];
+  pitching: BoxPitchingRow[];
+  onPlayer: (id: number) => void;
+}) {
+  const t = TEAMS[abbr];
+  return (
+    <div className="bg-surface border border-line rounded-[14px] overflow-hidden">
+      <div className="px-3.5 py-3 flex items-center gap-2.5 border-b border-line-2">
+        <TeamBadge abbr={abbr} size={26} />
+        <div className="font-head text-[15px] font-bold text-ink tracking-[-0.2px]">
+          {t?.name ?? abbr}
+        </div>
+      </div>
+      <div className="py-2">
+        <div
+          className="grid px-3.5 py-1.5 font-mono text-[10px] text-ink-3 tracking-[0.4px] border-b border-line-2"
+          style={{ gridTemplateColumns: "1.6fr 24px 24px 24px 24px 24px 24px 40px" }}
+        >
+          <span className="text-left">BATTING</span>
+          <span className="text-right">AB</span>
+          <span className="text-right">R</span>
+          <span className="text-right">H</span>
+          <span className="text-right">RBI</span>
+          <span className="text-right">BB</span>
+          <span className="text-right">K</span>
+          <span className="text-right">AVG</span>
+        </div>
+        {lineup.length === 0 && (
+          <div className="p-3.5 text-xs text-ink-3">Lineup not posted yet.</div>
+        )}
+        {lineup.map((r) => (
+          <button
+            key={r.id}
+            onClick={() => onPlayer(r.id)}
+            className="w-full grid items-center px-3.5 py-2 bg-transparent border-none cursor-pointer text-left border-b border-line-2"
+            style={{ gridTemplateColumns: "1.6fr 24px 24px 24px 24px 24px 24px 40px" }}
+          >
+            <span className="font-ui text-[13px] text-ink overflow-hidden text-ellipsis whitespace-nowrap">
+              {r.name} <span className="text-ink-3 text-[10px]">{r.pos}</span>
+            </span>
+            {(["ab", "r", "h", "rbi", "bb", "k"] as const).map((k) => (
+              <span key={k} className="font-mono text-xs text-ink text-right">
+                {r[k]}
+              </span>
+            ))}
+            <span className="font-mono text-xs text-ink-2 text-right">{r.avg ?? ""}</span>
+          </button>
+        ))}
+      </div>
+      <div className="py-2 border-t border-line">
+        <div
+          className="grid px-3.5 py-1.5 font-mono text-[10px] text-ink-3 tracking-[0.4px] border-b border-line-2"
+          style={{ gridTemplateColumns: "1.6fr 32px 24px 24px 24px 24px 24px" }}
+        >
+          <span className="text-left">PITCHING</span>
+          <span className="text-right">IP</span>
+          <span className="text-right">H</span>
+          <span className="text-right">R</span>
+          <span className="text-right">ER</span>
+          <span className="text-right">BB</span>
+          <span className="text-right">K</span>
+        </div>
+        {pitching.length === 0 && (
+          <div className="p-3.5 text-xs text-ink-3">No pitching data yet.</div>
+        )}
+        {pitching.map((r) => (
+          <button
+            key={r.id}
+            onClick={() => onPlayer(r.id)}
+            className="w-full grid items-center px-3.5 py-2 bg-transparent border-none cursor-pointer text-left border-b border-line-2"
+            style={{ gridTemplateColumns: "1.6fr 32px 24px 24px 24px 24px 24px" }}
+          >
+            <span className="font-ui text-[13px] text-ink overflow-hidden text-ellipsis whitespace-nowrap">
+              {r.name}
+            </span>
+            <span className="font-mono text-xs text-ink text-right">{r.ip}</span>
+            <span className="font-mono text-xs text-ink text-right">{r.h}</span>
+            <span className="font-mono text-xs text-ink text-right">{r.r}</span>
+            <span className="font-mono text-xs text-ink text-right">{r.er}</span>
+            <span className="font-mono text-xs text-ink text-right">{r.bb}</span>
+            <span className="font-mono text-xs text-ink text-right">{r.k}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── Plays tab ────────────────────────────────────────────────── */
+
+function PlaysTab({ plays }: { plays: Play[] }) {
+  if (plays.length === 0) {
+    return <div className="p-6 text-ink-3 text-center">No plays yet.</div>;
+  }
+  return (
+    <div className="bg-surface border border-line rounded-[14px] overflow-hidden">
+      {plays.map((p, i) => (
+        <div
+          key={i}
+          className={`grid items-center gap-2 px-3.5 py-3 ${i === plays.length - 1 ? "" : "border-b border-line-2"}`}
+          style={{ gridTemplateColumns: "60px 40px 1fr 60px" }}
+        >
+          <span className="font-mono text-[10px] text-ink-3 tracking-[0.5px]">{p.half}</span>
+          {p.tag ? (
+            <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded-[4px] bg-accent text-white w-fit">
+              {p.tag}
+            </span>
+          ) : (
+            <span />
+          )}
+          <div className="text-[13px] text-ink leading-snug">{p.desc}</div>
+          {p.score && (
+            <span className="font-mono text-xs text-ink-2 text-right font-semibold">{p.score}</span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── Pitches tab ──────────────────────────────────────────────── */
+
+function PitchesTab({ data, units }: { data: GameDetailData; units: BoxScoreUnits }) {
+  const plays = data.plays.filter((p) => p.pitchSeq && p.pitchSeq.length > 0);
+  if (plays.length === 0) {
+    return <div className="p-6 text-ink-3 text-center">No pitch data yet.</div>;
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      {plays.map((p, i) => (
+        <div key={i} className="bg-surface border border-line rounded-[14px] overflow-hidden">
+          <div className="px-3.5 py-2.5 border-b border-line-2">
+            <div className="font-mono text-[10px] text-ink-3">{p.half}</div>
+            <div className="text-[13px] text-ink mt-0.5">{p.desc}</div>
+          </div>
+          <div>
+            {p.pitchSeq!.map((s, j) => (
+              <div
+                key={j}
+                className={`grid items-center gap-2.5 px-3.5 py-2 ${j === 0 ? "" : "border-t border-line-2"}`}
+                style={{ gridTemplateColumns: "32px 60px 60px 1fr" }}
+              >
+                <span className="font-mono text-[11px] text-ink-3">P{s.n}</span>
+                <span className="font-head font-bold text-[13px] text-ink">
+                  {PITCH_TYPE_NAMES[s.type] || s.type || "—"}
+                </span>
+                <span className="font-mono text-xs text-ink">
+                  {formatVelo(s.velo, units).value}
+                  <span className="text-[9px] text-ink-3 font-medium ml-0.5">{formatVelo(s.velo, units).label}</span>
+                </span>
+                <span className="font-ui text-xs text-ink-2 text-right">{s.result}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}

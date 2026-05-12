@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# design handoff (extracted from zip — not part of the app)
+/handoff/
+/Baseball Test Spp-handoff.zip
