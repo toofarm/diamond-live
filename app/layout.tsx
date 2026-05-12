@@ -24,7 +24,7 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Diamond·Live",
+  title: "Game·State",
   description: "Live MLB scores, standings, and stats.",
 };
 

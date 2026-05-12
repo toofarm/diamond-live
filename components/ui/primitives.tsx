@@ -260,7 +260,7 @@ export function TopBar({
       .toUpperCase() || "G";
 
   return (
-    <header className="sticky top-0 z-[6] bg-surface border-b border-line-2 px-4 md:px-6 pb-3 pt-[calc(env(safe-area-inset-top,0)+18px)]">
+    <header className="sticky top-0 z-6 bg-surface border-b border-line-2 px-4 md:px-6 pb-3 pt-[calc(env(safe-area-inset-top,0)+18px)]">
       <div className="flex items-center gap-3 md:gap-6">
         <Wordmark />
 
@@ -290,9 +290,9 @@ export function TopBar({
 
         <button
           onClick={onProfile}
-          className="bg-chip border-none rounded-full pl-1 pr-3 py-1 cursor-pointer flex items-center gap-2 font-ui text-xs font-semibold text-ink hover:bg-line-2 transition-colors"
+          className="bg-chip border-none rounded-full pr-1 pl-1 py-1 md:pr-3 cursor-pointer flex items-center gap-2 font-ui text-xs font-semibold text-ink hover:bg-line-2 transition-colors"
         >
-          <span className="w-[22px] h-[22px] rounded-full bg-accent text-white flex items-center justify-center font-mono text-[10px] font-bold">
+          <span className="w-5.5 h-5.5 rounded-full bg-accent text-white flex items-center justify-center font-mono text-[10px] font-bold">
             {initials}
           </span>
           <span className="hidden sm:inline">{userName || "Guest"}</span>
