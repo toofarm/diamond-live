@@ -101,9 +101,8 @@ export function SettingsScreen({
             return (
               <div
                 key={abbr}
-                className={`flex items-center gap-3 px-3.5 py-3 ${
-                  i === follows.length - 1 ? "" : "border-b border-line-2"
-                }`}
+                className={`flex items-center gap-3 px-3.5 py-3 ${i === follows.length - 1 ? "" : "border-b border-line-2"
+                  }`}
               >
                 <TeamBadge abbr={abbr} size={28} />
                 <div className="flex-1 min-w-0">
@@ -185,7 +184,7 @@ export function SettingsScreen({
           <Wordmark />
         </div>
         <div className="text-center mt-1.5 text-ink-3 text-[11px] font-mono">
-          v0.1 · data via MLB Stats API
+          v0.1.1 · data via MLB Stats API
         </div>
       </div>
 
@@ -194,7 +193,7 @@ export function SettingsScreen({
           title="Box score units"
           options={[
             { value: "imperial", label: "Imperial", sub: "mph for pitch velocity" },
-            { value: "metric",   label: "Metric",   sub: "km/h for pitch velocity" },
+            { value: "metric", label: "Metric", sub: "km/h for pitch velocity" },
           ]}
           selected={prefs.boxScoreUnits}
           onSelect={(v) => {
@@ -212,7 +211,7 @@ export function SettingsScreen({
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mt-[22px] mb-2 px-1 font-head text-[11px] font-bold tracking-[1.4px] uppercase text-ink-3">
+    <div className="mt-5.5 mb-2 px-1 font-head text-[11px] font-bold tracking-[1.4px] uppercase text-ink-3">
       {children}
     </div>
   );
@@ -232,9 +231,8 @@ function ToggleRow({
   return (
     <button
       onClick={onToggle}
-      className={`w-full flex items-center gap-3 px-3.5 py-3.5 bg-transparent text-left cursor-pointer ${
-        last ? "" : "border-b border-line-2"
-      }`}
+      className={`w-full flex items-center gap-3 px-3.5 py-3.5 bg-transparent text-left cursor-pointer ${last ? "" : "border-b border-line-2"
+        }`}
     >
       <div className="flex-1 font-head text-[15px] font-semibold text-ink tracking-[-0.2px]">
         {label}
@@ -286,15 +284,13 @@ function Switch({
       aria-label={ariaLabel}
       disabled={disabled}
       onClick={onClick}
-      className={`relative shrink-0 w-12 h-7 rounded-full border-none p-0.5 transition-colors ${
-        disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"
-      } ${on ? "bg-accent" : "bg-chip"}`}
+      className={`relative shrink-0 w-12 h-7 rounded-full border-none p-0.5 transition-colors ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+        } ${on ? "bg-accent" : "bg-chip"}`}
     >
       <span
         aria-hidden="true"
-        className={`block w-6 h-6 rounded-full bg-surface shadow-sm transition-transform ${
-          on ? "translate-x-5" : "translate-x-0"
-        }`}
+        className={`block w-6 h-6 rounded-full bg-surface shadow-sm transition-transform ${on ? "translate-x-5" : "translate-x-0"
+          }`}
       />
     </button>
   );
@@ -432,9 +428,8 @@ function CategoryRow({
 }) {
   return (
     <div
-      className={`flex items-center gap-3 pl-[58px] pr-3.5 py-3 ${
-        last ? "" : "border-b border-line-2"
-      }`}
+      className={`flex items-center gap-3 pl-[58px] pr-3.5 py-3 ${last ? "" : "border-b border-line-2"
+        }`}
     >
       <div className="flex-1 min-w-0">
         <div className="font-head text-[13px] font-semibold text-ink tracking-[-0.2px]">{label}</div>
@@ -488,9 +483,8 @@ function ChooserSheet({
               <button
                 key={o.value}
                 onClick={() => onSelect(o.value)}
-                className={`w-full flex items-center gap-3 px-3.5 py-3 bg-transparent text-left cursor-pointer ${
-                  i === options.length - 1 ? "" : "border-b border-line-2"
-                }`}
+                className={`w-full flex items-center gap-3 px-3.5 py-3 bg-transparent text-left cursor-pointer ${i === options.length - 1 ? "" : "border-b border-line-2"
+                  }`}
               >
                 <div className="flex-1">
                   <div className="font-head text-[14px] font-semibold text-ink tracking-[-0.2px]">
