@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
+import { GoogleTagManager } from '@next/third-parties/google'
 import "./globals.css";
 
 const head = Bricolage_Grotesque({
@@ -65,6 +66,7 @@ export default function RootLayout({
       className={`${head.variable} ${ui.variable} ${mono.variable}`}
       suppressHydrationWarning
     >
+      <GoogleTagManager gtmId="GTM-PB5VZSRL" />
       <body>
         {/* Inline boot script — top of body runs synchronously before any of
             the React tree paints, and avoids the App Router hydration mismatch
