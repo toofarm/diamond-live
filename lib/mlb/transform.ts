@@ -13,6 +13,7 @@ import type {
   GameSummary,
   LeaderRow,
   Linescore,
+  PersonnelRow,
   Pitch,
   Play,
   PlayerCareerTotals,
@@ -27,6 +28,9 @@ import type {
   StandingsByDivision,
   StandingsRow,
   StatMode,
+  TeamLastGame,
+  TeamSeasonRecord,
+  TeamSeasonStats,
 } from "./types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -48,6 +52,27 @@ function dateISOFromGameDate(iso: string | undefined): string {
   return iso.slice(0, 10);
 }
 
+/** Generational suffixes that should travel with the surname when we shorten a
+ *  player's name (e.g. "Vladimir Guerrero Jr." → "Guerrero Jr.", not "Jr.").
+ *  Stored lowercase + dot-stripped for case/punctuation-insensitive matching. */
+const NAME_SUFFIXES = new Set(["jr", "sr", "ii", "iii", "iv", "v"]);
+
+/** Derive a display "last name" from a full name. Handles the common corner
+ *  case where the final token is a generational suffix — in that case we
+ *  return "<surname> <suffix>" so the UI doesn't render just "Jr." or "II".
+ *  Falls back to the trailing token (or the whole string) for everything else. */
+function lastNameFromFull(full: string | undefined): string {
+  if (!full) return "";
+  const parts = full.trim().split(/\s+/);
+  if (parts.length <= 1) return parts[0] ?? "";
+  const last = parts[parts.length - 1];
+  const lastKey = last.toLowerCase().replace(/\./g, "");
+  if (NAME_SUFFIXES.has(lastKey)) {
+    return `${parts[parts.length - 2]} ${last}`;
+  }
+  return last;
+}
+
 function mapStatus(abstract?: string, detailed?: string): GameSummary["status"] {
   if (abstract === "Live") return "LIVE";
   if (abstract === "Final") return "FINAL";
@@ -64,6 +89,19 @@ function readPitcher(p: any): string | undefined {
   if (!p) return undefined;
   // schedule hydrate shape: { fullName }
   return p.fullName ?? p.lastName ?? undefined;
+}
+
+/** Pull the per-game team W-L from a team-side object. Two upstream shapes:
+ *  - Schedule feed:  `teams.{side}.leagueRecord = { wins, losses, pct }`
+ *  - Live feed:      `teams.{side}.record.leagueRecord = { wins, losses, pct }`
+ *  We probe both. Returns undefined when neither has wins/losses populated. */
+function readRecord(side: any): { w: number; l: number } | undefined {
+  const rec = side?.leagueRecord ?? side?.record?.leagueRecord ?? side?.record;
+  if (!rec) return undefined;
+  const w = typeof rec.wins === "number" ? rec.wins : null;
+  const l = typeof rec.losses === "number" ? rec.losses : null;
+  if (w == null || l == null) return undefined;
+  return { w, l };
 }
 
 /** Map one game from `schedule?hydrate=probablePitcher,linescore,broadcasts` */
@@ -98,6 +136,8 @@ export function mapScheduleGame(g: any, dateISO?: string): GameSummary | null {
     },
     broadcast: broadcasts.slice(0, 2).join(", ") || undefined,
     venue: g?.venue?.name,
+    awayRecord: readRecord(g?.teams?.away),
+    homeRecord: readRecord(g?.teams?.home),
   };
 
   if (isLive && linescore) {
@@ -133,18 +173,21 @@ export function mapScheduleListGame(g: any, dateISO: string): ScheduleGame | nul
     time: passThroughISO(g?.gameDate),
     statusDetail: g?.status?.detailedState,
     series: g?.seriesGameNumber && g?.gamesInSeries ? { idx: g.seriesGameNumber, len: g.gamesInSeries } : undefined,
+    awayRecord: readRecord(g?.teams?.away),
+    homeRecord: readRecord(g?.teams?.home),
   };
 }
 
+const DIVISION_LABEL: Record<number, string> = {
+  200: "AL West", 201: "AL East", 202: "AL Central",
+  203: "NL West", 204: "NL East", 205: "NL Central",
+};
+
 export function mapStandings(json: any): StandingsByDivision {
   const out: StandingsByDivision = {};
-  const divisionLabel: Record<number, string> = {
-    200: "AL West", 201: "AL East", 202: "AL Central",
-    203: "NL West", 204: "NL East", 205: "NL Central",
-  };
   for (const rec of json?.records ?? []) {
     const divId = rec?.division?.id;
-    const label = divisionLabel[divId];
+    const label = DIVISION_LABEL[divId];
     if (!label) continue;
     const rows: StandingsRow[] = [];
     for (const tr of rec?.teamRecords ?? []) {
@@ -365,7 +408,7 @@ function mapAtBat(feed: any): AtBat | null {
       id: pId ?? 0,
       name: matchup?.pitcher?.fullName ?? "",
       firstName: matchup?.pitcher?.fullName?.split(" ")?.[0] ?? "",
-      lastName: matchup?.pitcher?.fullName?.split(" ")?.slice(-1)?.[0] ?? "",
+      lastName: lastNameFromFull(matchup?.pitcher?.fullName),
       team: (pTeam === "away" ? awayAbbr : homeAbbr) ?? "",
       hand: (matchup?.pitchHand?.code as "L" | "R") ?? "R",
       pitchCountGame: pitcherToday?.numberOfPitches ?? pitchEvents.length,
@@ -382,7 +425,7 @@ function mapAtBat(feed: any): AtBat | null {
       id: bId ?? 0,
       name: matchup?.batter?.fullName ?? "",
       firstName: matchup?.batter?.fullName?.split(" ")?.[0] ?? "",
-      lastName: matchup?.batter?.fullName?.split(" ")?.slice(-1)?.[0] ?? "",
+      lastName: lastNameFromFull(matchup?.batter?.fullName),
       team: (bTeam === "away" ? awayAbbr : homeAbbr) ?? "",
       hand: (matchup?.batSide?.code as "L" | "R") ?? "R",
       today: {
@@ -434,6 +477,8 @@ export function mapGameDetail(feed: any, dateISO?: string, winProbabilityFeed?: 
     time: passThroughISO(game?.datetime?.dateTime),
     venue: game?.venue?.name,
     weather: game?.weather?.condition,
+    awayRecord: readRecord(game?.teams?.away),
+    homeRecord: readRecord(game?.teams?.home),
   };
   if (status === "LIVE" && ls) {
     summary.inning = ls.currentInning ?? undefined;
@@ -564,7 +609,7 @@ function computeBatterSprays(
     let entry = byBatter.get(batterId);
     if (!entry) {
       const fullName = p?.matchup?.batter?.fullName ?? "";
-      const lastName = fullName.split(" ").slice(-1)[0] ?? fullName;
+      const lastName = lastNameFromFull(fullName) || fullName;
       entry = {
         batterId,
         fullName,
@@ -690,15 +735,201 @@ function groupForPosition(posType?: string): RosterRow["group"] {
   }
 }
 
+/** A roster entry's `status.description` is what tells us the player's roster
+ *  state — "Active", "10-Day Injured List", "60-Day Injured List", "Suspended",
+ *  etc. Anything other than "Active" surfaces in the Injuries tab. The injury
+ *  free-text (e.g. "Right oblique strain") lives at the roster-item's `notes`
+ *  field when MLB has populated it.
+ *
+ *  Note: we read from the roster entry itself (`r.status` / `r.notes`), NOT
+ *  from `r.person.status`. The person-level status is the player's overall
+ *  MLB-wide status (almost always "Active" for anyone alive and rostered),
+ *  not their current roster-spot state — using it returns no injuries. */
+function readInjuryStatus(rosterItem: any): RosterRow["injuryStatus"] {
+  const description = rosterItem?.status?.description;
+  if (!description) return undefined;
+  const desc = String(description).trim().toLowerCase();
+  if (desc === "active") return undefined;
+  // Reassignments are roster moves, not injuries. MLB flags these with
+  // status.code "RM" and description "Reassigned to Minors" — filter both
+  // so the Injuries tab stays scoped to actual ailments.
+  const code = rosterItem?.status?.code;
+  const codeStr = String(code ?? "").toUpperCase();
+  if (codeStr === "RM" || desc.startsWith("reassigned")) return undefined;
+  const notes = rosterItem?.notes;
+  const out: NonNullable<RosterRow["injuryStatus"]> = {
+    code: String(code ?? ""),
+    description: String(description),
+  };
+  if (notes) out.notes = String(notes);
+  return out;
+}
+
 export function mapRoster(json: any): RosterRow[] {
   const roster = json?.roster ?? [];
-  return roster.map((r: any) => ({
-    id: r?.person?.id ?? 0,
-    num: r?.jerseyNumber ?? "",
-    pos: r?.position?.abbreviation ?? "",
-    name: r?.person?.fullName ?? "",
-    group: groupForPosition(r?.position?.type),
-  }));
+  return roster.map((r: any) => {
+    const injuryStatus = readInjuryStatus(r);
+    const row: RosterRow = {
+      id: r?.person?.id ?? 0,
+      num: r?.jerseyNumber ?? "",
+      pos: r?.position?.abbreviation ?? "",
+      name: r?.person?.fullName ?? "",
+      group: groupForPosition(r?.position?.type),
+    };
+    if (injuryStatus) row.injuryStatus = injuryStatus;
+    return row;
+  });
+}
+
+/* ── Team season ─────────────────────────────────────────────────────────── */
+
+/** Extract a team's record from a `/standings?leagueId=103,104` payload. We
+ *  use the standings endpoint (not `/teams/{id}?hydrate=record`) because that
+ *  hydrate path doesn't populate `team.record` reliably — every team's record
+ *  comes back as an empty object, which is how this transform used to silently
+ *  return `0-0 / .000`. The standings shape mirrors what `mapStandings` reads. */
+export function mapTeamRecord(json: any, teamMlbId: number): TeamSeasonRecord {
+  for (const div of json?.records ?? []) {
+    for (const tr of div?.teamRecords ?? []) {
+      if (tr?.team?.id !== teamMlbId) continue;
+      const w = typeof tr.wins === "number" ? tr.wins : 0;
+      const l = typeof tr.losses === "number" ? tr.losses : 0;
+      const pct = w + l > 0 ? (w / (w + l)).toFixed(3).replace(/^0/, "") : ".000";
+      const divRankRaw = tr?.divisionRank;
+      const divRank = divRankRaw ? Number(divRankRaw) : undefined;
+      const divId = div?.division?.id;
+      return {
+        w,
+        l,
+        pct,
+        streak: tr?.streak?.streakCode ? String(tr.streak.streakCode) : undefined,
+        divRank: Number.isFinite(divRank) ? divRank : undefined,
+        divName: typeof divId === "number" ? DIVISION_LABEL[divId] : undefined,
+      };
+    }
+  }
+  return { w: 0, l: 0, pct: ".000" };
+}
+
+/** Map a `/schedule?teamId={id}` response into our last-5 games shape. Walks
+ *  every game in every date, keeps FINAL games where our team played, sorts
+ *  by date descending, slices to the most recent 5. */
+export function mapTeamLastGames(json: any, ourAbbr: string): TeamLastGame[] {
+  const dates = json?.dates ?? [];
+  const finals: TeamLastGame[] = [];
+  for (const d of dates) {
+    const dateISO: string = d?.date ?? "";
+    for (const g of d?.games ?? []) {
+      const status = mapStatus(g?.status?.abstractGameState, g?.status?.detailedState);
+      if (status !== "FINAL") continue;
+      const awayId = g?.teams?.away?.team?.id;
+      const homeId = g?.teams?.home?.team?.id;
+      const away = awayId != null ? abbrByMlbId(awayId) : undefined;
+      const home = homeId != null ? abbrByMlbId(homeId) : undefined;
+      if (!away || !home) continue;
+      const isHome = home === ourAbbr;
+      const isAway = away === ourAbbr;
+      if (!isHome && !isAway) continue;
+      const us = isHome ? g?.teams?.home?.score : g?.teams?.away?.score;
+      const them = isHome ? g?.teams?.away?.score : g?.teams?.home?.score;
+      if (typeof us !== "number" || typeof them !== "number") continue;
+      finals.push({
+        id: g.gamePk,
+        dateISO,
+        opp: isHome ? away : home,
+        home: isHome,
+        result: us > them ? "W" : "L",
+        score: { us, them },
+      });
+    }
+  }
+  finals.sort((a, b) => (a.dateISO < b.dateISO ? 1 : -1));
+  return finals.slice(0, 5);
+}
+
+/** Pull the season totals stat object for a hitting/pitching group from
+ *  `/teams/stats?sportId=1&group=hitting,pitching&stats=season&teamId={id}`.
+ *  MLB returns one `stats[]` entry per group, each with a single split row. */
+export function mapTeamSeasonStats(json: any, group: "hitting" | "pitching"): TeamSeasonStats {
+  const groups = json?.stats ?? [];
+  const g = groups.find((x: any) => x?.group?.displayName?.toLowerCase() === group);
+  const split = g?.splits?.[0];
+  const stat = split?.stat ?? {};
+  return { ...stat };
+}
+
+/** MLB `/stats/leaders` returns `leagueLeaders[]` — one entry per
+ *  leaderCategory. Each contains the same per-row shape `mapLeaders` already
+ *  handles. We bundle them by our display label (AVG/HR/RBI/...) and slice
+ *  each to the top-N. */
+const LEADER_CATEGORY_MAP: Record<string, string> = {
+  battingAverage: "AVG",
+  avg: "AVG",
+  homeRuns: "HR",
+  rbi: "RBI",
+  onBasePlusSlugging: "OPS",
+  ops: "OPS",
+  earnedRunAverage: "ERA",
+  era: "ERA",
+  wins: "W",
+  strikeOuts: "K",
+  strikeouts: "K",
+  saves: "SV",
+};
+
+export function mapTeamLeaders(json: any, topN = 3): Record<string, LeaderRow[]> {
+  const out: Record<string, LeaderRow[]> = {};
+  const groups = json?.leagueLeaders ?? [];
+  for (const g of groups) {
+    const rawCat = String(g?.leaderCategory ?? "");
+    const label = LEADER_CATEGORY_MAP[rawCat];
+    if (!label) continue;
+    const list = (g?.leaders ?? []).slice(0, topN).map((row: any) => ({
+      personId: row?.person?.id ?? 0,
+      fullName: row?.person?.fullName ?? "",
+      team: abbrByMlbId(row?.team?.id) ?? "",
+      position: row?.position?.abbreviation ?? undefined,
+      value: String(row?.value ?? ""),
+    }));
+    out[label] = list;
+  }
+  return out;
+}
+
+/* ── Personnel (coaches + front office) ──────────────────────────────────── */
+
+/** `/teams/{id}/coaches` returns `{ roster: [{person, job, jobId}, ...] }`. */
+export function mapCoaches(json: any): PersonnelRow[] {
+  const list = json?.roster ?? [];
+  return list
+    .map((r: any) => {
+      const id = r?.person?.id;
+      const name = r?.person?.fullName ?? "";
+      const title = r?.job ?? r?.jobTitle ?? "";
+      if (!name) return null;
+      const row: PersonnelRow = { name, title: String(title) };
+      if (typeof id === "number") row.id = id;
+      return row;
+    })
+    .filter((r: PersonnelRow | null): r is PersonnelRow => r !== null);
+}
+
+/** `/teams/{id}/personnel` shape: `{ roster: [{person, jobTitle, ...}, ...] }`.
+ *  Endpoint is undocumented and may 404 or return an empty roster — caller
+ *  passes us `{}` in that case, and we just return `[]`. */
+export function mapFrontOffice(json: any): PersonnelRow[] {
+  const list = json?.roster ?? json?.personnel ?? [];
+  return list
+    .map((r: any) => {
+      const id = r?.person?.id;
+      const name = r?.person?.fullName ?? r?.name ?? "";
+      const title = r?.jobTitle ?? r?.title ?? r?.job ?? "";
+      if (!name) return null;
+      const row: PersonnelRow = { name: String(name), title: String(title) };
+      if (typeof id === "number") row.id = id;
+      return row;
+    })
+    .filter((r: PersonnelRow | null): r is PersonnelRow => r !== null);
 }
 
 /* ── Player ──────────────────────────────────────────────────────────────── */

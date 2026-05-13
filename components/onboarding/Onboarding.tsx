@@ -14,7 +14,7 @@ interface Props {
 }
 
 const overlayClass =
-  "absolute inset-0 bg-canvas flex flex-col z-20";
+  "fixed inset-0 max-w-[1200px] mx-auto bg-canvas flex flex-col z-20";
 
 const ctaWrapClass =
   "absolute bottom-0 inset-x-0 px-6 pt-3.5 pb-[calc(env(safe-area-inset-bottom,0)+28px)] " +

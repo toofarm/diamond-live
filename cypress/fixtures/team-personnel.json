@@ -1,0 +1,16 @@
+{
+  "coaches": [
+    { "id": 110001, "name": "Carlos Mendoza",  "title": "Manager" },
+    { "id": 110002, "name": "John Gibbons",    "title": "Bench Coach" },
+    { "id": 110003, "name": "Jeremy Hefner",   "title": "Pitching Coach" },
+    { "id": 110004, "name": "Eric Chavez",     "title": "Hitting Coach" },
+    { "id": 110005, "name": "Antoan Richardson","title": "First Base Coach" },
+    { "id": 110006, "name": "Mike Sarbaugh",   "title": "Third Base Coach" }
+  ],
+  "frontOffice": [
+    { "id": 210001, "name": "Steve Cohen",       "title": "Owner" },
+    { "id": 210002, "name": "David Stearns",     "title": "President of Baseball Operations" },
+    { "id": 210003, "name": "Bryn Alderson",     "title": "Senior Vice President" },
+    { "id": 210004, "name": "Ian Levin",         "title": "Vice President, Baseball Operations" }
+  ]
+}

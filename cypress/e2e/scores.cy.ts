@@ -22,6 +22,16 @@ describe("/scores", () => {
     cy.contains(/your name\?/i).should("not.exist");
     // At least one score card from the fixture should be on screen.
     cy.get('[data-cy="score-card"]').should("have.length.at.least", 1);
+    // Each card shows both teams' W-L as secondary text under the abbr
+    // (fixture id=1 is NYM 22-17 @ PHI 20-19).
+    cy.get('[data-cy="score-card"][data-cy-game-id="1"]')
+      .find('[data-cy="team-record"]')
+      .should("have.length", 2)
+      .and(($els) => {
+        const text = [...$els].map((el) => el.textContent?.trim()).join(" ");
+        expect(text).to.include("22 - 17");
+        expect(text).to.include("20 - 19");
+      });
   });
 
   it("view scoreboard with followed teams in fixture → Following section lists those teams' games", () => {

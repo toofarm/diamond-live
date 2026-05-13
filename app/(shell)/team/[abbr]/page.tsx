@@ -12,6 +12,7 @@ export default function Page() {
       teamAbbr={params.abbr}
       onBack={() => smartBack(router, "/standings")}
       onPlayer={(pid) => router.push(`/player/${pid}`)}
+      onGame={(gid) => router.push(`/game/${gid}`)}
     />
   );
 }

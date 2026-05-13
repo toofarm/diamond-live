@@ -19,6 +19,11 @@ describe("/game/[id]", () => {
     cy.contains(/TOP\s+7/i).should("be.visible");
     cy.contains("B-K").should("be.visible");
     cy.contains("OUTS").should("be.visible");
+    // Each team column renders its W-L beneath the city (FIXTURE_LIVE_GAME has
+    // NYM 22-17 and PHI 20-19).
+    cy.get('[data-cy="hero-headline"] [data-cy="team-record"]').should("have.length", 2);
+    cy.get('[data-cy="hero-headline"]').contains("22 - 17").should("be.visible");
+    cy.get('[data-cy="hero-headline"]').contains("20 - 19").should("be.visible");
   });
 
   it("click Box sub-tab → both teams' lineups and pitching rows render", () => {

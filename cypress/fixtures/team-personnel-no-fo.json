@@ -1,0 +1,8 @@
+{
+  "coaches": [
+    { "id": 110001, "name": "Carlos Mendoza",  "title": "Manager" },
+    { "id": 110002, "name": "John Gibbons",    "title": "Bench Coach" },
+    { "id": 110003, "name": "Jeremy Hefner",   "title": "Pitching Coach" }
+  ],
+  "frontOffice": []
+}
