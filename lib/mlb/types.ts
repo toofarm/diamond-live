@@ -26,6 +26,14 @@ export interface GameSummary {
   broadcast?: string;
   venue?: string;
   weather?: string;
+
+  awayRecord?: TeamRecord;
+  homeRecord?: TeamRecord;
+}
+
+export interface TeamRecord {
+  w: number;
+  l: number;
 }
 
 export interface LinescoreInning { away: number | null; home: number | null }
@@ -176,6 +184,8 @@ export interface ScheduleGame {
   time?: string;             // ISO 8601 game-start timestamp (formatted client-side via lib/date.ts:formatLocalTime)
   statusDetail?: string;
   series?: { idx: number; len: number };
+  awayRecord?: TeamRecord;
+  homeRecord?: TeamRecord;
 }
 
 export interface LeaderRow {
@@ -200,11 +210,66 @@ export interface RosterRow {
   name: string;
   hand?: string;
   group: "pitchers" | "catchers" | "infielders" | "outfielders" | "designated_hitter";
+  /** Populated when MLB's roster entry has a non-"Active" status (IL stint,
+   *  suspended, restricted, etc.). `description` is the official roster-status
+   *  label (e.g. "60-Day Injured List"); `notes`, when present, is the actual
+   *  injury free-text (e.g. "Right oblique strain"). */
+  injuryStatus?: { code: string; description: string; notes?: string };
 }
 
 export interface TeamDetailData {
   abbr: string;
   roster: RosterRow[];
+}
+
+export interface TeamSeasonRecord {
+  w: number;
+  l: number;
+  pct: string;
+  streak?: string;
+  divRank?: number;
+  divName?: string;
+}
+
+/** One past game from the team's perspective, used in the SeasonTab "last 5" pill row. */
+export interface TeamLastGame {
+  id: number;
+  dateISO: string;
+  opp: string;
+  home: boolean;
+  result: "W" | "L";
+  score: { us: number; them: number };
+}
+
+/** Flat key→value bag of season totals (avg, era, ops, etc.). Shape mirrors MLB's
+ *  `stats[].splits[0].stat` so the UI can pick known keys without TS gymnastics. */
+export type TeamSeasonStats = Record<string, string | number | undefined>;
+
+export type TeamBattingLeaderCategory = "AVG" | "HR" | "RBI" | "OPS";
+export type TeamPitchingLeaderCategory = "ERA" | "W" | "K" | "SV";
+
+export interface TeamSeasonData {
+  record: TeamSeasonRecord;
+  lastGames: TeamLastGame[];
+  leaders: {
+    batting: Record<TeamBattingLeaderCategory, LeaderRow[]>;
+    pitching: Record<TeamPitchingLeaderCategory, LeaderRow[]>;
+  };
+  stats: {
+    batting: TeamSeasonStats;
+    pitching: TeamSeasonStats;
+  };
+}
+
+export interface PersonnelRow {
+  id?: number;
+  name: string;
+  title: string;
+}
+
+export interface PersonnelData {
+  coaches: PersonnelRow[];
+  frontOffice: PersonnelRow[];
 }
 
 export interface PlayerDetailData {

@@ -1,0 +1,96 @@
+{
+  "record": {
+    "w": 22,
+    "l": 17,
+    "pct": ".564",
+    "streak": "W2",
+    "divRank": 2,
+    "divName": "NL East"
+  },
+  "lastGames": [
+    { "id": 8001, "dateISO": "2026-05-11", "opp": "ATL", "home": false, "result": "L", "score": { "us": 3, "them": 5 } },
+    { "id": 8002, "dateISO": "2026-05-10", "opp": "ATL", "home": false, "result": "W", "score": { "us": 7, "them": 4 } },
+    { "id": 8003, "dateISO": "2026-05-09", "opp": "ATL", "home": false, "result": "W", "score": { "us": 6, "them": 2 } },
+    { "id": 8004, "dateISO": "2026-05-08", "opp": "PHI", "home": true,  "result": "L", "score": { "us": 1, "them": 4 } },
+    { "id": 8005, "dateISO": "2026-05-07", "opp": "PHI", "home": true,  "result": "W", "score": { "us": 5, "them": 3 } }
+  ],
+  "leaders": {
+    "batting": {
+      "AVG": [
+        { "personId": 596019, "fullName": "Francisco Lindor", "team": "NYM", "position": "SS", "value": ".305" },
+        { "personId": 624413, "fullName": "Brandon Nimmo",    "team": "NYM", "position": "LF", "value": ".289" },
+        { "personId": 624415, "fullName": "Jeff McNeil",      "team": "NYM", "position": "2B", "value": ".277" }
+      ],
+      "HR": [
+        { "personId": 660271, "fullName": "Pete Alonso",      "team": "NYM", "position": "1B", "value": "12" },
+        { "personId": 645277, "fullName": "Mark Vientos",     "team": "NYM", "position": "3B", "value": "9"  },
+        { "personId": 596019, "fullName": "Francisco Lindor", "team": "NYM", "position": "SS", "value": "8"  }
+      ],
+      "RBI": [
+        { "personId": 660271, "fullName": "Pete Alonso",      "team": "NYM", "position": "1B", "value": "33" },
+        { "personId": 596019, "fullName": "Francisco Lindor", "team": "NYM", "position": "SS", "value": "27" },
+        { "personId": 645277, "fullName": "Mark Vientos",     "team": "NYM", "position": "3B", "value": "24" }
+      ],
+      "OPS": [
+        { "personId": 660271, "fullName": "Pete Alonso",      "team": "NYM", "position": "1B", "value": ".942" },
+        { "personId": 596019, "fullName": "Francisco Lindor", "team": "NYM", "position": "SS", "value": ".878" },
+        { "personId": 624413, "fullName": "Brandon Nimmo",    "team": "NYM", "position": "LF", "value": ".842" }
+      ]
+    },
+    "pitching": {
+      "ERA": [
+        { "personId": 605135, "fullName": "Kodai Senga",      "team": "NYM", "position": "P", "value": "2.61" },
+        { "personId": 657042, "fullName": "Jose Quintana",    "team": "NYM", "position": "P", "value": "3.18" },
+        { "personId": 657277, "fullName": "Adam Ottavino",    "team": "NYM", "position": "P", "value": "3.45" }
+      ],
+      "W": [
+        { "personId": 605135, "fullName": "Kodai Senga",      "team": "NYM", "position": "P", "value": "6" },
+        { "personId": 657042, "fullName": "Jose Quintana",    "team": "NYM", "position": "P", "value": "4" },
+        { "personId": 668909, "fullName": "Tylor Megill",     "team": "NYM", "position": "P", "value": "3" }
+      ],
+      "K": [
+        { "personId": 605135, "fullName": "Kodai Senga",      "team": "NYM", "position": "P", "value": "62" },
+        { "personId": 657042, "fullName": "Jose Quintana",    "team": "NYM", "position": "P", "value": "41" },
+        { "personId": 668909, "fullName": "Tylor Megill",     "team": "NYM", "position": "P", "value": "38" }
+      ],
+      "SV": [
+        { "personId": 657277, "fullName": "Adam Ottavino",    "team": "NYM", "position": "P", "value": "8" },
+        { "personId": 663457, "fullName": "Drew Smith",       "team": "NYM", "position": "P", "value": "2" },
+        { "personId": 661269, "fullName": "Reed Garrett",     "team": "NYM", "position": "P", "value": "1" }
+      ]
+    }
+  },
+  "stats": {
+    "batting": {
+      "avg": ".261",
+      "obp": ".338",
+      "slg": ".421",
+      "ops": ".759",
+      "gamesPlayed": 39,
+      "atBats": 1320,
+      "hits": 345,
+      "doubles": 68,
+      "triples": 6,
+      "homeRuns": 41,
+      "runs": 178,
+      "rbi": 171,
+      "baseOnBalls": 142,
+      "strikeOuts": 322,
+      "stolenBases": 31
+    },
+    "pitching": {
+      "era": "3.42",
+      "whip": "1.22",
+      "strikeoutsPer9Inn": "9.1",
+      "walksPer9Inn": "3.2",
+      "wins": 22,
+      "losses": 17,
+      "saves": 11,
+      "holds": 28,
+      "gamesPlayed": 39,
+      "gamesStarted": 39,
+      "inningsPitched": "342.1",
+      "strikeOuts": 347
+    }
+  }
+}

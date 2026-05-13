@@ -15,9 +15,14 @@ export async function GET(_: Request, { params }: { params: Promise<{ teamAbbr: 
   }
 
   try {
-    const json = await mlb<unknown>(`/teams/${team.mlbId}/roster?rosterType=active`, {
-      revalidate: 600,
-    });
+    // `rosterType=40Man` so IL players are included (the `active` roster type
+    // omits them). Each roster entry already carries `status.{code,description}`
+    // and an optional `notes` free-text without any hydrate — that's where the
+    // Injuries tab pulls its data from in mapRoster.
+    const json = await mlb<unknown>(
+      `/teams/${team.mlbId}/roster?rosterType=40Man`,
+      { revalidate: 600 },
+    );
     const roster = mapRoster(json);
     return Response.json({ abbr: teamAbbr, roster }, { headers: CACHE_HEADERS.STATIC_10M });
   } catch (err) {

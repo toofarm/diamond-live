@@ -50,13 +50,19 @@ export function StandingsScreen({ onTeam }: { onTeam: (abbr: string) => void }) 
             key={divName}
             className="mt-3.5 bg-surface border border-line rounded-[14px] overflow-hidden"
           >
-            <div className="px-3.5 py-2.5 flex items-center border-b border-line-2">
-              <div className="font-head text-sm font-bold text-ink flex-1 tracking-[-0.2px]">
+            <div
+              data-cy="standings-header"
+              className="grid items-center gap-2 px-3.5 py-2.5 border-b border-line-2"
+              style={{ gridTemplateColumns: "24px 1fr 30px 30px 50px 40px" }}
+            >
+              <span />
+              <div className="font-head text-sm font-bold text-ink tracking-[-0.2px]">
                 {divName}
               </div>
-              <span className="font-mono text-[10px] text-ink-3 tracking-[0.5px]">
-                W&nbsp;&nbsp;L&nbsp;&nbsp;&nbsp;PCT&nbsp;&nbsp;GB
-              </span>
+              <span className="text-right font-mono text-[10px] text-ink-3 tracking-[0.5px]">W</span>
+              <span className="text-right font-mono text-[10px] text-ink-3 tracking-[0.5px]">L</span>
+              <span className="text-right font-mono text-[10px] text-ink-3 tracking-[0.5px]">PCT</span>
+              <span className="text-right font-mono text-[10px] text-ink-3 tracking-[0.5px]">GB</span>
             </div>
             {rows.map((row, i) => (
               <button

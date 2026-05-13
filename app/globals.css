@@ -15,6 +15,7 @@
   --color-neg:        #9F2B1F;
   --color-live:       #C73E1D;
   --color-chip:       rgba(20, 17, 13, 0.06);
+  --color-active:     rgba(199, 62, 29, 0.10);  /* momentary press-feedback tint (matches accent at low opacity) */
   --color-overlay:    rgba(20, 17, 13, 0.55);
 
   /* next/font sets --ff-head/--ff-ui/--ff-mono on <html>; we layer fallbacks here */
@@ -45,6 +46,7 @@
   --color-neg:        #FF7A45;
   --color-live:       #FF7A45;
   --color-chip:       rgba(242, 239, 232, 0.08);
+  --color-active:     rgba(255, 122, 69, 0.14);
   --color-overlay:    rgba(0, 0, 0, 0.6);
 }
 

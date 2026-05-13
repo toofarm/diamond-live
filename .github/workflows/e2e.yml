@@ -1,0 +1,47 @@
+name: E2E
+
+# Runs the Cypress suite against every pull request targeting main. Pair this
+# workflow with a branch-protection rule (Settings → Branches → main → Require
+# status checks to pass) and select "e2e / cypress" as a required check to
+# block merges on test failures.
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  cypress:
+    name: cypress
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # The cypress-io action handles `npm ci`, binary caching, server
+      # orchestration (build → start → wait-on), and Cypress invocation in one
+      # step. baseUrl in cypress.config.ts is http://localhost:3000, so we
+      # build for production and serve via `next start` for a CI environment
+      # that mirrors what gets deployed rather than the dev-mode JIT path.
+      - name: Run Cypress
+        uses: cypress-io/github-action@v6
+        with:
+          build: npm run build
+          start: npm run start
+          wait-on: "http://localhost:3000"
+          wait-on-timeout: 120
+
+      - name: Upload screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypress-screenshots
+          path: cypress/screenshots
+          if-no-files-found: ignore
+          retention-days: 7

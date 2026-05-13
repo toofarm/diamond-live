@@ -22,6 +22,8 @@ export const FIXTURE_LIVE_GAME: GameDetailData = {
     strikes: 1,
     venue: "Citizens Bank Park",
     weather: "Clear, 71°F, Wind 6 mph Out To CF",
+    awayRecord: { w: 22, l: 17 },
+    homeRecord: { w: 20, l: 19 },
   },
   linescore: {
     innings: [

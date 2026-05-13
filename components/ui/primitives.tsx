@@ -224,7 +224,7 @@ export function Wordmark() {
 
 export function Loader() {
   return (
-    <div className="flex items-center justify-center min-h-[70dvh] py-12">
+    <div className="flex items-center justify-center min-h-[85dvh] py-12">
       <BaseballMark size={56} className="animate-spin [animation-duration:1.4s]" />
     </div>
   );
@@ -385,7 +385,7 @@ export function TabBar({
 }) {
   return (
     <div
-      className={`md:hidden fixed bottom-0 inset-x-0 px-1.5 pt-2 pb-[calc(env(safe-area-inset-bottom,0)+14px)] bg-surface border-t border-line flex justify-around z-[5] transition-transform duration-[240ms] will-change-transform ${hidden ? "translate-y-full" : "translate-y-0"
+      className={`md:hidden fixed bottom-0 inset-x-0 px-1.5 pt-2 pb-[calc(env(safe-area-inset-bottom,0)+14px)] bg-surface border-t border-line flex justify-around z-5 transition-transform duration-[240ms] will-change-transform ${hidden ? "translate-y-full" : "translate-y-0"
         }`}
       style={{ transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)" }}
     >
@@ -395,7 +395,7 @@ export function TabBar({
           <button
             key={t.id}
             onClick={() => onChange(t.id)}
-            className={`flex flex-col items-center gap-0.5 px-2.5 py-1.5 bg-transparent border-none cursor-pointer font-ui ${active ? "text-accent" : "text-ink-2"
+            className={`flex flex-col items-center gap-0.5 px-2.5 py-1.5 bg-transparent border-none cursor-pointer font-ui rounded-sm active:bg-active ${active ? "text-accent" : "text-ink-2"
               }`}
           >
             {t.icon({

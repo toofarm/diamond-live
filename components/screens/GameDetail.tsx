@@ -12,6 +12,7 @@ import type {
   Play,
   SprayOutcome,
   SprayPoint,
+  TeamRecord,
   WinProbability,
 } from "@/lib/mlb/types";
 import { TEAMS } from "@/lib/mlb/teams";
@@ -172,7 +173,7 @@ export function GameDetail({
             >
               <div ref={headlineRef}>
                 <div className="flex items-center gap-3.5">
-                  <TeamColumn abbr={game.away} onTeam={onTeam} />
+                  <TeamColumn abbr={game.away} record={game.awayRecord} onTeam={onTeam} />
                   <div className="flex-[1.2] text-center">
                     <div className="font-head text-[42px] font-bold text-ink tracking-[-1.5px] leading-none">
                       <span>{game.awayScore ?? 0}</span>
@@ -190,7 +191,7 @@ export function GameDetail({
                           : formatLocalTime(game.time) ?? game.statusDetail}
                     </div>
                   </div>
-                  <TeamColumn abbr={game.home} onTeam={onTeam} />
+                  <TeamColumn abbr={game.home} record={game.homeRecord} onTeam={onTeam} />
                 </div>
               </div>
             </div>
@@ -309,17 +310,33 @@ function ScoreChip({
   );
 }
 
-function TeamColumn({ abbr, onTeam }: { abbr: string; onTeam: (abbr: string) => void }) {
+function TeamColumn({
+  abbr,
+  record,
+  onTeam,
+}: {
+  abbr: string;
+  record?: TeamRecord;
+  onTeam: (abbr: string) => void;
+}) {
   const t = TEAMS[abbr];
   return (
     <div className="flex-1 flex flex-col items-center gap-1">
-      <TeamBadge abbr={abbr} size={42} />
+      <button
+        onClick={() => onTeam(abbr)}>
+        <TeamBadge abbr={abbr} size={42} />
+      </button>
       <button
         onClick={() => onTeam(abbr)}
         className="bg-transparent border-none cursor-pointer font-head text-[15px] font-bold text-ink tracking-[-0.2px]"
       >
         {t?.city ?? abbr}
       </button>
+      {record && (
+        <div data-cy="team-record" className="font-mono text-[11px] text-ink-3 tracking-[0.4px]">
+          {record.w} - {record.l}
+        </div>
+      )}
     </div>
   );
 }

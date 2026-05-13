@@ -17,6 +17,7 @@
 export const CACHE_HEADERS = {
   LIVE:       { "Cache-Control": "no-store" },
   SCHEDULE:   { "Cache-Control": "public, max-age=60,  stale-while-revalidate=120,  stale-if-error=600"  },
-  STATIC_5M:  { "Cache-Control": "public, max-age=300, stale-while-revalidate=600,  stale-if-error=1800" },
-  STATIC_10M: { "Cache-Control": "public, max-age=600, stale-while-revalidate=1200, stale-if-error=3600" },
+  STATIC_5M:  { "Cache-Control": "public, max-age=300,  stale-while-revalidate=600,  stale-if-error=1800" },
+  STATIC_10M: { "Cache-Control": "public, max-age=600,  stale-while-revalidate=1200, stale-if-error=3600" },
+  STATIC_1H:  { "Cache-Control": "public, max-age=3600, stale-while-revalidate=7200, stale-if-error=86400" },
 } as const;

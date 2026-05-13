@@ -1,0 +1,23 @@
+{
+  "abbr": "NYM",
+  "roster": [
+    { "id": 605135, "num": "34", "pos": "SP", "name": "Kodai Senga",     "group": "pitchers" },
+    { "id": 657277, "num": "0",  "pos": "RP", "name": "Adam Ottavino",   "group": "pitchers" },
+    { "id": 642708, "num": "4",  "pos": "C",  "name": "Francisco Alvarez","group": "catchers" },
+    { "id": 596019, "num": "12", "pos": "SS", "name": "Francisco Lindor","group": "infielders" },
+    { "id": 660271, "num": "20", "pos": "1B", "name": "Pete Alonso",     "group": "infielders" },
+    { "id": 624415, "num": "1",  "pos": "2B", "name": "Jeff McNeil",     "group": "infielders" },
+    { "id": 645277, "num": "27", "pos": "3B", "name": "Mark Vientos",    "group": "infielders" },
+    { "id": 624413, "num": "9",  "pos": "LF", "name": "Brandon Nimmo",   "group": "outfielders" },
+    { "id": 670541, "num": "6",  "pos": "RF", "name": "Starling Marte",  "group": "outfielders" },
+    { "id": 668939, "num": "22", "pos": "CF", "name": "Luisangel Acuña", "group": "outfielders" },
+    { "id": 663630, "num": "11", "pos": "DH", "name": "Brett Baty",      "group": "designated_hitter" },
+
+    { "id": 605200, "num": "32", "pos": "SP", "name": "Sean Manaea",     "group": "pitchers",
+      "injuryStatus": { "code": "IL60", "description": "60-Day Injured List", "notes": "Right oblique strain" } },
+    { "id": 605194, "num": "39", "pos": "RP", "name": "Edwin Diaz",      "group": "pitchers",
+      "injuryStatus": { "code": "IL15", "description": "15-Day Injured List", "notes": "Right shoulder soreness" } },
+    { "id": 668800, "num": "16", "pos": "OF", "name": "Tyrone Taylor",   "group": "outfielders",
+      "injuryStatus": { "code": "IL10", "description": "10-Day Injured List" } }
+  ]
+}
