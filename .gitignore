@@ -23,7 +23,10 @@
 # misc
 .DS_Store
 *.pem
+
+# AI scaffolding
 .claude/
+.mcp.json
 
 
 # debug
