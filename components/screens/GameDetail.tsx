@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useApi } from "@/lib/mlb/client";
 import type {
   AtBat,
@@ -90,8 +90,28 @@ export function GameDetail({
   onPlayer: (id: number) => void;
   onTeam: (abbr: string) => void;
 }) {
-  const { data, loading, error } = useApi<GameDetailData>(`/api/mlb/game/${gameId}`, { pollMs: 15_000 });
+  const { data, loading, error, refresh } = useApi<GameDetailData>(`/api/mlb/game/${gameId}`, { pollMs: 15_000 });
   const [tab, setTab] = useState<SubTab>("summary");
+
+  // The 15s poll above keeps a foregrounded tab fresh, but browsers throttle
+  // background-tab timers heavily (often paused entirely), so a user returning
+  // to this view after switching away can see up-to-15s-stale data. Fire an
+  // immediate refresh when the tab becomes visible or the window regains focus
+  // so they're greeted with current game state. `refresh`'s identity changes
+  // each useApi render, but registering/unregistering two listeners on each
+  // change is negligible and the cleanup ensures we never double-bind.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    const onFocus = () => refresh();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [refresh]);
 
   const user = useUser();
   const prefs = user?.prefs ?? DEFAULT_PREFS;
