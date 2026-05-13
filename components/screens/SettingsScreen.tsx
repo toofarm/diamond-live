@@ -13,6 +13,7 @@ import {
   requestPermission,
   type PermissionState,
 } from "@/lib/notifications";
+import { useTitle } from "@/lib/title";
 
 interface SettingsScreenProps {
   name: string;
@@ -41,6 +42,7 @@ export function SettingsScreen({
   onUpdateNotifications,
   onUpdatePrefs,
 }: SettingsScreenProps) {
+  useTitle("Settings");
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(name);
   const [unitsSheetOpen, setUnitsSheetOpen] = useState(false);

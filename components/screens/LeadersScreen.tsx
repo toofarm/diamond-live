@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useApi } from "@/lib/mlb/client";
 import type { LeaderCategory, LeaderGroup, LeaderRow } from "@/lib/mlb/types";
 import { AppBar, Loader, TeamBadge } from "@/components/ui/primitives";
+import { useTitle } from "@/lib/title";
 
 interface CatMeta {
   id: LeaderCategory;
@@ -53,6 +54,7 @@ function splitValue(v: string): { dot: string; rest: string } {
 }
 
 export function LeadersScreen({ onPlayer }: { onPlayer: (id: number) => void }) {
+  useTitle("Leaders");
   const { data, loading, error } = useApi<{
     season: number;
     leaders: Partial<Record<LeaderCategory, LeaderRow[]>>;

@@ -7,6 +7,7 @@ import { dateStrip, formatTodayHeader } from "@/lib/date";
 import { ScoreCard } from "@/components/ui/ScoreCard";
 import { DateStrip, SectionHead } from "@/components/ui/primitives";
 import { IconStar, IconChevron } from "@/components/ui/icons";
+import { useTitle } from "@/lib/title";
 
 interface ScoresResp {
   date: string;
@@ -20,6 +21,8 @@ export function ScoresScreen({
   follows: string[];
   onGame: (id: number) => void;
 }) {
+  useTitle("Scores");
+
   const strip = useMemo(() => dateStrip(0, 7, 7), []);
   const todayIdx = strip.findIndex((d) => d.today);
   const [dateIdx, setDateIdx] = useState(todayIdx >= 0 ? todayIdx : 7);

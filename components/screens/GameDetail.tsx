@@ -19,6 +19,7 @@ import { TEAMS } from "@/lib/mlb/teams";
 import { BackChevron, TeamBadge, BaseDiamond, Loader, OutDots } from "@/components/ui/primitives";
 import { DEFAULT_PREFS, useUser, type BoxScoreUnits } from "@/lib/storage";
 import { formatLocalTime } from "@/lib/date";
+import { useTitle } from "@/lib/title";
 
 /** Format pitch velocity in the user's preferred units. Returns the value + label. */
 function formatVelo(mph: number, units: BoxScoreUnits): { value: string; label: string } {
@@ -125,6 +126,15 @@ export function GameDetail({
 
   const game = data?.summary;
   const isLive = game?.status === "LIVE";
+
+  // Live score in the browser-tab title — updates with each poll/refresh so a
+  // user with multiple tabs open can glance at the tab strip and see the
+  // current state without focusing the window. Example: "1 (PHI) - 0 (DET)".
+  useTitle(
+    game
+      ? `${game.awayScore ?? 0} (${game.away}) - ${game.homeScore ?? 0} (${game.home})`
+      : null,
+  );
 
   // If the user disables pitch-by-pitch while viewing it, fall back to summary.
   if (!prefs.pitchByPitch && tab === "pitches") {

@@ -24,8 +24,12 @@ const mono = IBM_Plex_Mono({
   display: "swap",
 });
 
+// SSR default — every client screen overrides this via the `useTitle` hook
+// (lib/title.ts), but this is what shows during the brief window between
+// first paint and the screen's first effect, and on any future server-rendered
+// page that doesn't set its own title.
 export const metadata: Metadata = {
-  title: "Game·State",
+  title: "Game State",
   description: "Live MLB scores, standings, and stats.",
 };
 

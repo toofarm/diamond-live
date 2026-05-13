@@ -12,6 +12,7 @@ import type {
 import { TEAMS, type Team } from "@/lib/mlb/teams";
 import { BackChevron, Loader, TeamBadge } from "@/components/ui/primitives";
 import { currentSeason } from "@/lib/date";
+import { useTitle } from "@/lib/title";
 
 type SubTab = "season" | "splits" | "gamelog" | "history";
 
@@ -130,6 +131,7 @@ export function PlayerDetail({
   const [tab, setTab] = useState<SubTab>("season");
   const team = data?.team ? TEAMS[data.team] : undefined;
   const mode: StatMode = data ? detectMode(data) : "hitting";
+  useTitle(data?.fullName);
 
   return (
     <div data-cy="player-detail" className="absolute inset-0 bg-canvas flex flex-col z-10 overflow-hidden">
