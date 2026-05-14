@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { E2E_MODE } from "@/lib/supabase/env";
 
 /**
  * OAuth + email-magic-link callback. The provider (Google for now) redirects
@@ -19,6 +20,10 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
   const next = searchParams.get("next") ?? "/scores";
+
+  // Tests never go through a real OAuth exchange — just bounce to `next` so
+  // the spec lands somewhere usable rather than 500ing on the Supabase call.
+  if (E2E_MODE) return NextResponse.redirect(`${origin}${next}`);
 
   if (code) {
     const supabase = await createClient();

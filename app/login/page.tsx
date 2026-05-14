@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { E2E_MODE } from "@/lib/supabase/env";
 import { LoginForm } from "./LoginForm";
 
 export const metadata: Metadata = {
@@ -13,8 +14,10 @@ export const metadata: Metadata = {
  * it). All interactive bits live in the `<LoginForm>` client component below.
  */
 export default async function LoginPage() {
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getClaims();
-  if (data?.claims) redirect("/scores");
+  if (!E2E_MODE) {
+    const supabase = await createClient();
+    const { data } = await supabase.auth.getClaims();
+    if (data?.claims) redirect("/scores");
+  }
   return <LoginForm />;
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { E2E_MODE } from "@/lib/supabase/env";
 import { ForgotPasswordForm } from "./ForgotPasswordForm";
 
 export const metadata: Metadata = {
@@ -13,8 +14,10 @@ export const metadata: Metadata = {
  * where they can update their password directly using their live session.
  */
 export default async function ForgotPasswordPage() {
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getClaims();
-  if (data?.claims) redirect("/reset-password");
+  if (!E2E_MODE) {
+    const supabase = await createClient();
+    const { data } = await supabase.auth.getClaims();
+    if (data?.claims) redirect("/reset-password");
+  }
   return <ForgotPasswordForm />;
 }

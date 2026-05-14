@@ -9,6 +9,7 @@
 import { useSyncExternalStore } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
+import { E2E_MODE } from "@/lib/supabase/env";
 
 
 export type BoxScoreUnits = "imperial" | "metric";
@@ -244,6 +245,15 @@ function initAuthStore(): void {
   if (authInitialized || typeof window === "undefined") return;
   authInitialized = true;
 
+  // Test runs never touch Supabase — resolve immediately to `anonymous` so
+  // Cypress specs that don't seed an authenticated session render the app
+  // shell without firing a JWKS fetch or session probe.
+  if (E2E_MODE) {
+    authSnapshot = { status: "anonymous" };
+    notifyAuth();
+    return;
+  }
+
   const supabase = createClient();
 
   const applyAuthenticated = async (userId: string, email: string) => {
@@ -329,6 +339,11 @@ function getServerAuthSnapshot(): AuthSnapshot {
  */
 export async function refreshAuthSnapshot(): Promise<void> {
   if (typeof window === "undefined") return;
+  if (E2E_MODE) {
+    authSnapshot = { status: "anonymous" };
+    notifyAuth();
+    return;
+  }
   const supabase = createClient();
   const { data } = await supabase.auth.getClaims();
   const claims = data?.claims;
