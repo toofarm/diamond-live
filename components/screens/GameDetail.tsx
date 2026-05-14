@@ -235,7 +235,7 @@ export function GameDetail({
                   visible={condensed}
                 />
 
-                <div className="flex-1 flex items-center justify-center gap-[18px]">
+                <div className="flex-1 flex items-center justify-center gap-4.5">
                   <BaseDiamond bases={game.bases ?? [false, false, false]} size={32} />
                   <div className="font-mono text-[13px] text-ink">
                     <span className="font-semibold">

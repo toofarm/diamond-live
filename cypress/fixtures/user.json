@@ -14,5 +14,6 @@
     "winProbability": true,
     "pitchByPitch": true,
     "theme": "light"
-  }
+  },
+  "onboarded": true
 }

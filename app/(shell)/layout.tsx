@@ -2,10 +2,21 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { useUser, saveUser, clearUser, DEFAULT_NOTIFICATIONS, type UserProfile } from "@/lib/storage";
+import {
+  useUser,
+  useUserState,
+  saveUser,
+  saveAuthenticatedProfile,
+  clearUser,
+  readGuestProfile,
+  mergeProfileForUpgrade,
+  DEFAULT_NOTIFICATIONS,
+  type UserProfile,
+} from "@/lib/storage";
 import { TabBar, TopBar } from "@/components/ui/primitives";
 import { IconScores, IconStandings, IconSchedule, IconLeaders, IconSettings } from "@/components/ui/icons";
 import { Onboarding } from "@/components/onboarding/Onboarding";
+import { GuestNudgeBanner } from "@/components/auth/GuestNudgeBanner";
 import { ShellContext, type ShellState } from "@/lib/shell";
 import { useGameNotifications, usePermissionState } from "@/lib/notifications";
 
@@ -31,6 +42,7 @@ export default function ShellLayout({ children }: { children: React.ReactNode })
   const isTabRoute = tab !== null;
 
   const user = useUser();
+  const userState = useUserState();
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const [manageMode, setManageMode] = useState(false);
 
@@ -53,7 +65,41 @@ export default function ShellLayout({ children }: { children: React.ReactNode })
   const [hydrated, setHydrated] = useState(false);
   // eslint-disable-next-line react-hooks/set-state-in-effect -- post-mount hydration flag; React's canonical SSR-skew pattern
   useEffect(() => setHydrated(true), []);
-  const onboardingOpen = hydrated && (manageMode || (user == null && !onboardingDismissed));
+
+  // Onboarding gate: open for brand-new anonymous visitors AND for authenticated
+  // users who just signed up (Supabase session exists but the profile row's
+  // `onboarded` flag is still false). We deliberately do NOT open during the
+  // brief `loading` window — that would flash the overlay for returning auth
+  // users before their session is verified.
+  const isAnonymous = userState.status === "anonymous";
+  const isAuthNotOnboarded =
+    userState.status === "authenticated" && !userState.profile.onboarded;
+  const needsOnboarding = isAnonymous || isAuthNotOnboarded;
+
+  // Guest → authenticated auto-upgrade: when a user goes from guest to a
+  // permanent account, they've already picked their name + teams during the
+  // guest flow. Re-traversing onboarding is friction we can avoid — we merge
+  // the localStorage guest profile into their fresh server profile and flip
+  // `onboarded` to true automatically, so they land directly on /scores.
+  //
+  // If the merge fails we mark `autoUpgradeFailed` and fall through to the
+  // normal onboarding overlay (which gets the same merged values as `initial`
+  // below, so the user can retry manually).
+  const [autoUpgradeFailed, setAutoUpgradeFailed] = useState(false);
+  const upgradeFiredRef = useRef(false);
+  const guestForUpgrade =
+    isAuthNotOnboarded && !autoUpgradeFailed ? readGuestProfile() : null;
+  const willAutoUpgrade =
+    guestForUpgrade !== null && userState.status === "authenticated";
+
+  // Onboarding stays closed during the auto-upgrade window. On success,
+  // `onboarded` flips true and needsOnboarding becomes false naturally. On
+  // failure, `autoUpgradeFailed` flips true → willAutoUpgrade becomes false
+  // → the overlay opens with merged `initial` values for manual completion.
+  const onboardingOpen =
+    hydrated &&
+    !willAutoUpgrade &&
+    (manageMode || (needsOnboarding && !onboardingDismissed));
 
   // Global notification dispatcher — must live above the route tree so notifications
   // continue firing while the user is on any tab (or background-tab).
@@ -88,7 +134,49 @@ export default function ShellLayout({ children }: { children: React.ReactNode })
     setNavHidden(false);
   }, [pathname]);
 
-  const persist = (next: UserProfile) => saveUser(next);
+  /** Auth-aware write. Authenticated users go through the `upsert_profile`
+   *  RPC (which also refreshes the auth snapshot so the in-memory profile
+   *  catches up); guests and anonymous users write to localStorage as
+   *  before. Returns a Promise so callers that need to defer UI (e.g.
+   *  dismissing the onboarding overlay) can await.
+   *
+   *  After a successful authenticated write we also clear the localStorage
+   *  guest profile, if any. It's dead weight at that point — useUserState
+   *  is reading from Supabase — and leaving it around would resurrect old
+   *  guest state if the user later signed out and continued as guest. */
+  const persist = async (next: UserProfile): Promise<void> => {
+    if (userState.status === "authenticated") {
+      await saveAuthenticatedProfile(next);
+      clearUser();
+    } else {
+      saveUser(next);
+    }
+  };
+
+  // Guest → authenticated auto-upgrade effect (paired with `willAutoUpgrade`
+  // computed above). Fires once when conditions are met; resets and falls
+  // through to manual onboarding on failure. `upgradeKey` provides a stable
+  // dep — userState is a new object on every render so we can't depend on
+  // it directly without making the effect re-fire endlessly.
+  const upgradeKey =
+    userState.status === "authenticated"
+      ? `${userState.userId}:${userState.profile.onboarded}`
+      : userState.status;
+  useEffect(() => {
+    if (!willAutoUpgrade) return;
+    if (upgradeFiredRef.current) return;
+    if (userState.status !== "authenticated" || !guestForUpgrade) return;
+
+    upgradeFiredRef.current = true;
+    const merged = mergeProfileForUpgrade(userState.profile, guestForUpgrade);
+    persist({ ...merged, onboarded: true }).catch(() => {
+      upgradeFiredRef.current = false;
+      setAutoUpgradeFailed(true);
+    });
+    // userState + persist + guestForUpgrade are stable for this render —
+    // re-running on every render would cause an upgrade loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [willAutoUpgrade, upgradeKey]);
 
   const toggleFollow = (abbr: string) => {
     if (!user) return;
@@ -128,6 +216,8 @@ export default function ShellLayout({ children }: { children: React.ReactNode })
             onProfile={() => router.push("/settings")}
           />
 
+          {userState.status === "guest" && <GuestNudgeBanner />}
+
           <main
             className={`relative flex-1 min-h-0 ${isTabRoute ? "pb-[calc(env(safe-area-inset-bottom,0)+76px)] md:pb-0" : ""}`}
           >
@@ -145,12 +235,28 @@ export default function ShellLayout({ children }: { children: React.ReactNode })
 
           {onboardingOpen && (
             <Onboarding
-              initial={manageMode && user ? user : undefined}
-              onDone={(profile) => {
-                persist(profile);
+              // Initial values for the form. Three cases:
+              //  - manage mode (Settings → Manage Teams): seed from current profile
+              //  - guest → auth upgrade: merge guest's localStorage data into the
+              //    fresh server profile so the user doesn't re-enter their teams
+              //  - all other cases (anonymous splash → guest): no initial values
+              initial={
+                manageMode && user
+                  ? user
+                  : isAuthNotOnboarded && userState.status === "authenticated"
+                    ? mergeProfileForUpgrade(userState.profile, readGuestProfile())
+                    : undefined
+              }
+              manageMode={manageMode}
+              onDone={async (profile) => {
+                await persist(profile);
                 dismissOnboarding();
               }}
               onCancel={dismissOnboarding}
+              // Only anonymous users see the "Create a profile vs guest" splash —
+              // an authenticated-but-not-yet-onboarded user is already signed up
+              // and just needs to pick teams.
+              onSignUp={isAnonymous ? () => router.push("/login") : undefined}
             />
           )}
         </div>
