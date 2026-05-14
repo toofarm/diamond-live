@@ -17,6 +17,7 @@ import type {
 } from "@/lib/mlb/types";
 import { TEAMS } from "@/lib/mlb/teams";
 import { BackChevron, TeamBadge, BaseDiamond, Loader, OutDots } from "@/components/ui/primitives";
+import { IconRefresh } from "@/components/ui/icons";
 import { DEFAULT_PREFS, useUser, type BoxScoreUnits } from "@/lib/storage";
 import { formatLocalTime } from "@/lib/date";
 import { useTitle } from "@/lib/title";
@@ -91,8 +92,32 @@ export function GameDetail({
   onPlayer: (id: number) => void;
   onTeam: (abbr: string) => void;
 }) {
-  const { data, loading, error, refresh } = useApi<GameDetailData>(`/api/mlb/game/${gameId}`, { pollMs: 15_000 });
+  const { data, loading, error, refresh, fetching } = useApi<GameDetailData>(`/api/mlb/game/${gameId}`, { pollMs: 15_000 });
   const [tab, setTab] = useState<SubTab>("summary");
+
+  // Local debounce for the manual-refresh button. The button is disabled
+  // whenever a fetch is in flight (`fetching`) AND for a short cooldown
+  // after each manual click — so rapid taps can't queue back-to-back
+  // requests against the MLB API. The cooldown is short enough (1.5s) to
+  // not feel sticky if the user genuinely wants a second fetch.
+  const REFRESH_COOLDOWN_MS = 1500;
+  const [refreshCooldown, setRefreshCooldown] = useState(false);
+  const cooldownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
+    };
+  }, []);
+  const refreshDisabled = fetching || refreshCooldown;
+  const handleManualRefresh = () => {
+    if (refreshDisabled) return;
+    refresh();
+    setRefreshCooldown(true);
+    cooldownTimerRef.current = setTimeout(
+      () => setRefreshCooldown(false),
+      REFRESH_COOLDOWN_MS,
+    );
+  };
 
   // The 15s poll above keeps a foregrounded tab fresh, but browsers throttle
   // background-tab timers heavily (often paused entirely), so a user returning
@@ -169,9 +194,27 @@ export function GameDetail({
   return (
     <div data-cy="game-detail" className="absolute inset-0 bg-canvas flex flex-col z-10 overflow-hidden">
       <div className="px-3.5 md:px-6 pb-2.5 bg-surface border-b border-line-2 pt-4">
-        <div className="flex items-center">
+        <div className="flex items-center gap-2">
           <BackChevron onClick={onBack} label="Scores" />
           <div className="flex-1" />
+          {isLive && (
+            <button
+              data-cy="manual-refresh"
+              type="button"
+              onClick={handleManualRefresh}
+              disabled={refreshDisabled}
+              aria-label={fetching ? "Refreshing game data…" : "Refresh game data"}
+              aria-busy={fetching}
+              className={`p-1.5 rounded-full bg-transparent border-none flex items-center justify-center transition-opacity ${refreshDisabled ? "cursor-default opacity-40" : "cursor-pointer hover:bg-chip"
+                }`}
+            >
+              <IconRefresh
+                size={16}
+                stroke="var(--color-live)"
+                className={fetching || refreshDisabled ? "animate-spin" : ""}
+              />
+            </button>
+          )}
           {isLive && (
             <span
               data-cy="live-pill"
@@ -797,7 +840,7 @@ function BoxSection({
 }) {
   const t = TEAMS[abbr];
   return (
-    <div className="bg-surface border border-line rounded-[14px] overflow-hidden">
+    <div className="bg-surface border border-line rounded-[14px] relative">
       <div className="px-3.5 py-3 flex items-center gap-2.5 border-b border-line-2">
         <TeamBadge abbr={abbr} size={26} />
         <div className="font-head text-[15px] font-bold text-ink tracking-[-0.2px]">
@@ -806,17 +849,18 @@ function BoxSection({
       </div>
       <div className="py-2">
         <div
-          className="grid px-3.5 py-1.5 font-mono text-[10px] text-ink-3 tracking-[0.4px] border-b border-line-2"
+          className="grid px-3.5 py-1.5 font-mono text-[10px] text-ink-3 tracking-[0.4px] border-b border-line-2
+          md:relative sticky -top-4 bg-surface z-5000"
           style={{ gridTemplateColumns: "1.6fr 24px 24px 24px 24px 24px 24px 40px" }}
         >
-          <span className="text-left">BATTING</span>
-          <span className="text-right">AB</span>
-          <span className="text-right">R</span>
-          <span className="text-right">H</span>
-          <span className="text-right">RBI</span>
-          <span className="text-right">BB</span>
-          <span className="text-right">K</span>
-          <span className="text-right">AVG</span>
+          <span className="text-left bg-surface">BATTING</span>
+          <span className="text-right bg-surface">AB</span>
+          <span className="text-right bg-surface">R</span>
+          <span className="text-right bg-surface">H</span>
+          <span className="text-right bg-surface">RBI</span>
+          <span className="text-right bg-surface">BB</span>
+          <span className="text-right bg-surface">K</span>
+          <span className="text-right bg-surface">AVG</span>
         </div>
         {lineup.length === 0 && (
           <div className="p-3.5 text-xs text-ink-3">Lineup not posted yet.</div>
@@ -844,16 +888,17 @@ function BoxSection({
       </div>
       <div className="py-2 border-t border-line">
         <div
-          className="grid px-3.5 py-1.5 font-mono text-[10px] text-ink-3 tracking-[0.4px] border-b border-line-2"
+          className="grid px-3.5 py-1.5 font-mono text-[10px] text-ink-3 tracking-[0.4px] border-b border-line-2
+          md:relative sticky -top-4 bg-surface z-5000"
           style={{ gridTemplateColumns: "1.6fr 32px 24px 24px 24px 24px 24px" }}
         >
-          <span className="text-left">PITCHING</span>
-          <span className="text-right">IP</span>
-          <span className="text-right">H</span>
-          <span className="text-right">R</span>
-          <span className="text-right">ER</span>
-          <span className="text-right">BB</span>
-          <span className="text-right">K</span>
+          <span className="text-left bg-surface">PITCHING</span>
+          <span className="text-right bg-surface">IP</span>
+          <span className="text-right bg-surface">H</span>
+          <span className="text-right bg-surface">R</span>
+          <span className="text-right bg-surface">ER</span>
+          <span className="text-right bg-surface">BB</span>
+          <span className="text-right bg-surface">K</span>
         </div>
         {pitching.length === 0 && (
           <div className="p-3.5 text-xs text-ink-3">No pitching data yet.</div>

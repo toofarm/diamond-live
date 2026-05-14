@@ -271,7 +271,7 @@ export function SettingsScreen({
           <Wordmark />
         </div>
         <div className="text-center mt-1.5 text-ink-3 text-[11px] font-mono">
-          v0.1.1 · data via MLB Stats API
+          {process.env.NEXT_PUBLIC_APP_VERSION} · data via MLB Stats API
         </div>
       </div>
 
