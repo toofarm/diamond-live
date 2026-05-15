@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { E2E_MODE } from "@/lib/supabase/env";
 
 /**
  * Server-side Supabase client. Use from Server Components, Server Actions,
@@ -14,10 +15,20 @@ import { cookies } from "next/headers";
 export async function createClient() {
   const cookieStore = await cookies();
 
+  // Under E2E_MODE the env vars are typically unset in CI; fall back to
+  // placeholders so the SDK instantiates without throwing. Every code path
+  // that would actually call into this client (login/forgot/reset pages,
+  // /auth/callback, middleware, server actions) is short-circuited
+  // upstream when E2E_MODE is on.
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    ?? (E2E_MODE ? "https://placeholder.supabase.co" : undefined);
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+    ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    ?? (E2E_MODE ? "placeholder-anon-key" : undefined);
+
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-      ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)!,
+    url!,
+    key!,
     {
       cookies: {
         getAll() {

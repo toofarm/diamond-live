@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { E2E_MODE } from "@/lib/supabase/env";
 
 /**
  * Refresh the Supabase auth tokens on every request and forward the refreshed
@@ -17,10 +18,19 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
+  // Placeholder-fallback mirrors lib/supabase/server.ts. The root middleware
+  // already short-circuits before reaching `updateSession` when E2E_MODE is
+  // on, but if any future code path imports this module and reaches the
+  // factory call under test, instantiation stays safe.
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    ?? (E2E_MODE ? "https://placeholder.supabase.co" : undefined);
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+    ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    ?? (E2E_MODE ? "placeholder-anon-key" : undefined);
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-      ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)!,
+    url!,
+    key!,
     {
       cookies: {
         getAll() {

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { E2E_MODE } from "@/lib/supabase/env";
 
 /** Result shape shared by the sign-in / sign-up server actions. `needsConfirm`
  *  is only set on a successful sign-up when the project requires email
@@ -17,6 +18,7 @@ export async function signInWithPassword(
   email: string,
   password: string,
 ): Promise<AuthResult> {
+  if (E2E_MODE) return { ok: false, error: "Auth disabled under E2E_MODE." };
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { ok: false, error: error.message };
@@ -30,6 +32,7 @@ export async function signUpWithPassword(
   email: string,
   password: string,
 ): Promise<AuthResult> {
+  if (E2E_MODE) return { ok: false, error: "Auth disabled under E2E_MODE." };
   const supabase = await createClient();
   // Default the username to the part of the email before `@` — gives new
   // users a sensible display name without an extra signup field. The
@@ -52,6 +55,7 @@ export async function signUpWithPassword(
 }
 
 export async function signOut(): Promise<void> {
+  if (E2E_MODE) return;
   const supabase = await createClient();
   await supabase.auth.signOut();
   revalidatePath("/", "layout");
@@ -73,6 +77,7 @@ export async function requestPasswordReset(
   email: string,
   origin: string,
 ): Promise<AuthResult> {
+  if (E2E_MODE) return { ok: false, error: "Auth disabled under E2E_MODE." };
   const supabase = await createClient();
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${origin}/auth/callback?next=/reset-password`,
@@ -87,6 +92,7 @@ export async function requestPasswordReset(
  * and by the future Settings "Change password" affordance.
  */
 export async function updatePassword(newPassword: string): Promise<AuthResult> {
+  if (E2E_MODE) return { ok: false, error: "Auth disabled under E2E_MODE." };
   const supabase = await createClient();
   const { error } = await supabase.auth.updateUser({ password: newPassword });
   if (error) return { ok: false, error: error.message };
