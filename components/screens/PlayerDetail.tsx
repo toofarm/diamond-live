@@ -222,7 +222,7 @@ function PlayerHero({
           style={{
             fontSize: "clamp(90px, 22vw, 160px)",
             color: primary,
-            opacity: 0.18,
+            opacity: 0.30,
             letterSpacing: "-0.06em",
           }}
         >

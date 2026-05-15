@@ -73,7 +73,10 @@ function lastNameFromFull(full: string | undefined): string {
   return last;
 }
 
-function mapStatus(abstract?: string, detailed?: string): GameSummary["status"] {
+function mapStatus(
+  abstract?: string,
+  detailed?: string,
+): GameSummary["status"] {
   if (abstract === "Live") return "LIVE";
   if (abstract === "Final") return "FINAL";
   if (detailed && /postponed/i.test(detailed)) return "POSTPONED";
@@ -113,19 +116,27 @@ export function mapScheduleGame(g: any, dateISO?: string): GameSummary | null {
   if (!away || !home) return null; // skip non-MLB games (e.g. spring training opponents)
 
   const linescore = g?.linescore;
-  const status = mapStatus(g?.status?.abstractGameState, g?.status?.detailedState);
+  const status = mapStatus(
+    g?.status?.abstractGameState,
+    g?.status?.detailedState,
+  );
   const isLive = status === "LIVE";
 
   const broadcasts = Array.isArray(g?.broadcasts)
-    ? g.broadcasts.filter((b: any) => b?.type === "TV" && b?.isNational !== true).map((b: any) => b?.name).filter(Boolean)
+    ? g.broadcasts
+        .filter((b: any) => b?.type === "TV" && b?.isNational !== true)
+        .map((b: any) => b?.name)
+        .filter(Boolean)
     : [];
 
   const summary: GameSummary = {
     id: g.gamePk,
     away,
     home,
-    awayScore: typeof g?.teams?.away?.score === "number" ? g.teams.away.score : null,
-    homeScore: typeof g?.teams?.home?.score === "number" ? g.teams.home.score : null,
+    awayScore:
+      typeof g?.teams?.away?.score === "number" ? g.teams.away.score : null,
+    homeScore:
+      typeof g?.teams?.home?.score === "number" ? g.teams.home.score : null,
     status,
     statusDetail: g?.status?.detailedState,
     dateISO: dateISO ?? dateISOFromGameDate(g?.gameDate),
@@ -143,7 +154,8 @@ export function mapScheduleGame(g: any, dateISO?: string): GameSummary | null {
   if (isLive && linescore) {
     summary.inning = linescore.currentInning ?? undefined;
     const halfRaw = String(linescore.inningHalf ?? "").toUpperCase();
-    summary.inningHalf = halfRaw === "BOTTOM" ? "BOT" : halfRaw === "TOP" ? "TOP" : undefined;
+    summary.inningHalf =
+      halfRaw === "BOTTOM" ? "BOT" : halfRaw === "TOP" ? "TOP" : undefined;
     summary.bases = readBases(linescore);
     summary.outs = linescore.outs ?? 0;
     summary.balls = linescore.balls ?? 0;
@@ -154,33 +166,52 @@ export function mapScheduleGame(g: any, dateISO?: string): GameSummary | null {
 }
 
 /** Map one game from /schedule into our schedule-screen shape (simpler). */
-export function mapScheduleListGame(g: any, dateISO: string): ScheduleGame | null {
+export function mapScheduleListGame(
+  g: any,
+  dateISO: string,
+): ScheduleGame | null {
   const awayId = g?.teams?.away?.team?.id;
   const homeId = g?.teams?.home?.team?.id;
   const away = awayId != null ? abbrByMlbId(awayId) : undefined;
   const home = homeId != null ? abbrByMlbId(homeId) : undefined;
   if (!away || !home) return null;
-  const status = mapStatus(g?.status?.abstractGameState, g?.status?.detailedState);
+  const status = mapStatus(
+    g?.status?.abstractGameState,
+    g?.status?.detailedState,
+  );
 
   return {
     id: g.gamePk,
     dateISO,
     away,
     home,
-    away_score: typeof g?.teams?.away?.score === "number" ? g.teams.away.score : undefined,
-    home_score: typeof g?.teams?.home?.score === "number" ? g.teams.home.score : undefined,
+    away_score:
+      typeof g?.teams?.away?.score === "number"
+        ? g.teams.away.score
+        : undefined,
+    home_score:
+      typeof g?.teams?.home?.score === "number"
+        ? g.teams.home.score
+        : undefined,
     status,
     time: passThroughISO(g?.gameDate),
     statusDetail: g?.status?.detailedState,
-    series: g?.seriesGameNumber && g?.gamesInSeries ? { idx: g.seriesGameNumber, len: g.gamesInSeries } : undefined,
+    series:
+      g?.seriesGameNumber && g?.gamesInSeries
+        ? { idx: g.seriesGameNumber, len: g.gamesInSeries }
+        : undefined,
     awayRecord: readRecord(g?.teams?.away),
     homeRecord: readRecord(g?.teams?.home),
   };
 }
 
 const DIVISION_LABEL: Record<number, string> = {
-  200: "AL West", 201: "AL East", 202: "AL Central",
-  203: "NL West", 204: "NL East", 205: "NL Central",
+  200: "AL West",
+  201: "AL East",
+  202: "AL Central",
+  203: "NL West",
+  204: "NL East",
+  205: "NL Central",
 };
 
 export function mapStandings(json: any): StandingsByDivision {
@@ -195,7 +226,8 @@ export function mapStandings(json: any): StandingsByDivision {
       if (!abbr) continue;
       const w = tr?.wins ?? 0;
       const l = tr?.losses ?? 0;
-      const pct = (w + l > 0 ? (w / (w + l)).toFixed(3).replace(/^0/, "") : ".000");
+      const pct =
+        w + l > 0 ? (w / (w + l)).toFixed(3).replace(/^0/, "") : ".000";
       const gb = tr?.gamesBack ?? "—";
       rows.push({ abbr, w, l, pct, gb: gb === "-" ? "—" : String(gb) });
     }
@@ -234,16 +266,17 @@ function mapLinescore(json: any): Linescore | null {
 
 const PLAY_TAG: Record<string, string> = {
   "Home Run": "HR",
-  "Triple": "3B",
-  "Double": "2B",
-  "Single": "1B",
-  "Walk": "BB",
-  "Strikeout": "K",
+  Triple: "3B",
+  Double: "2B",
+  Single: "1B",
+  Walk: "BB",
+  Strikeout: "K",
 };
 
 function mapPlay(p: any): Play {
   const halfRaw = String(p?.about?.halfInning ?? "").toLowerCase();
-  const half = `${halfRaw === "top" ? "TOP" : "BOT"} ${p?.about?.inning ?? ""}`.trim();
+  const half =
+    `${halfRaw === "top" ? "TOP" : "BOT"} ${p?.about?.inning ?? ""}`.trim();
   const event = p?.result?.event;
   const tag = event ? PLAY_TAG[event] : undefined;
 
@@ -253,16 +286,21 @@ function mapPlay(p: any): Play {
     .map((e: any, idx: number) => ({
       n: idx + 1,
       type: e?.details?.type?.code ?? "",
-      velo: typeof e?.pitchData?.startSpeed === "number" ? Number(e.pitchData.startSpeed.toFixed(1)) : 0,
+      velo:
+        typeof e?.pitchData?.startSpeed === "number"
+          ? Number(e.pitchData.startSpeed.toFixed(1))
+          : 0,
       result: e?.details?.description ?? e?.details?.call?.description ?? "",
     }));
 
   return {
     half,
     desc: p?.result?.description ?? p?.result?.event ?? "",
-    score: typeof p?.result?.awayScore === "number" && typeof p?.result?.homeScore === "number"
-      ? `${p.result.awayScore}-${p.result.homeScore}`
-      : undefined,
+    score:
+      typeof p?.result?.awayScore === "number" &&
+      typeof p?.result?.homeScore === "number"
+        ? `${p.result.awayScore}-${p.result.homeScore}`
+        : undefined,
     outs: p?.count?.outs,
     tag,
     pitchSeq: pitchSeq.length ? pitchSeq : undefined,
@@ -333,7 +371,9 @@ function mapBoxPitching(side: any): BoxPitchingRow[] {
 function mapAtBat(feed: any): AtBat | null {
   const live = feed?.liveData;
   const currentPlay = live?.plays?.currentPlay;
-  const currentPitches = (currentPlay?.playEvents ?? []).filter((e: any) => e?.isPitch);
+  const currentPitches = (currentPlay?.playEvents ?? []).filter(
+    (e: any) => e?.isPitch,
+  );
 
   let cur = currentPlay;
   let pitchEvents = currentPitches;
@@ -357,25 +397,41 @@ function mapAtBat(feed: any): AtBat | null {
     // statsapi pX is in feet, roughly -1.5..1.5 (zone half-width ~0.83 ft).
     // pZ ranges from ~1.5 (low strike) to ~3.5 (high strike). We map to UI's
     // [-1, 1] zone interior and [-1.8, 1.8] outer canvas.
-    const px = typeof coords.pX === "number" ? Math.max(-1.8, Math.min(1.8, coords.pX / 0.85)) : 0;
+    const px =
+      typeof coords.pX === "number"
+        ? Math.max(-1.8, Math.min(1.8, coords.pX / 0.85))
+        : 0;
     // Center zone vertically at midpoint of szTop/szBot if provided; else default mid ~2.5 ft.
-    const szTop = typeof e?.pitchData?.strikeZoneTop === "number" ? e.pitchData.strikeZoneTop : 3.4;
-    const szBot = typeof e?.pitchData?.strikeZoneBottom === "number" ? e.pitchData.strikeZoneBottom : 1.6;
+    const szTop =
+      typeof e?.pitchData?.strikeZoneTop === "number"
+        ? e.pitchData.strikeZoneTop
+        : 3.4;
+    const szBot =
+      typeof e?.pitchData?.strikeZoneBottom === "number"
+        ? e.pitchData.strikeZoneBottom
+        : 1.6;
     const mid = (szTop + szBot) / 2;
     const half = (szTop - szBot) / 2 || 1;
-    const py = typeof coords.pZ === "number" ? Math.max(-1.8, Math.min(1.8, (coords.pZ - mid) / half)) : 0;
+    const py =
+      typeof coords.pZ === "number"
+        ? Math.max(-1.8, Math.min(1.8, (coords.pZ - mid) / half))
+        : 0;
 
     const callCode = e?.details?.code ?? "";
     const desc: string = e?.details?.description ?? "";
     let result: Pitch["result"] = "ball";
     if (e?.details?.isStrike) result = "strike";
     if (e?.details?.isInPlay) result = "inplay";
-    if (callCode === "F" || callCode === "FT" || /foul/i.test(desc)) result = "foul-2k";
+    if (callCode === "F" || callCode === "FT" || /foul/i.test(desc))
+      result = "foul-2k";
 
     return {
       n: i + 1,
       type: e?.details?.type?.code ?? "",
-      velo: typeof e?.pitchData?.startSpeed === "number" ? Number(e.pitchData.startSpeed.toFixed(1)) : 0,
+      velo:
+        typeof e?.pitchData?.startSpeed === "number"
+          ? Number(e.pitchData.startSpeed.toFixed(1))
+          : 0,
       x: px,
       y: py,
       result,
@@ -386,9 +442,16 @@ function mapAtBat(feed: any): AtBat | null {
   const matchup = cur?.matchup ?? {};
   const pId = matchup?.pitcher?.id;
   const bId = matchup?.batter?.id;
-  const players = (live?.boxscore?.teams?.away?.players ?? {}) as Record<string, any>;
-  const homePlayers = (live?.boxscore?.teams?.home?.players ?? {}) as Record<string, any>;
-  const findPlayer = (id: number) => players[`ID${id}`] ?? homePlayers[`ID${id}`];
+  const players = (live?.boxscore?.teams?.away?.players ?? {}) as Record<
+    string,
+    any
+  >;
+  const homePlayers = (live?.boxscore?.teams?.home?.players ?? {}) as Record<
+    string,
+    any
+  >;
+  const findPlayer = (id: number) =>
+    players[`ID${id}`] ?? homePlayers[`ID${id}`];
 
   const pPlayer = pId ? findPlayer(pId) : null;
   const bPlayer = bId ? findPlayer(bId) : null;
@@ -454,7 +517,11 @@ function mapAtBat(feed: any): AtBat | null {
   return ab;
 }
 
-export function mapGameDetail(feed: any, dateISO?: string, winProbabilityFeed?: any): GameDetailData {
+export function mapGameDetail(
+  feed: any,
+  dateISO?: string,
+  winProbabilityFeed?: any,
+): GameDetailData {
   const game = feed?.gameData;
   const live = feed?.liveData;
   const awayId = game?.teams?.away?.id;
@@ -462,7 +529,10 @@ export function mapGameDetail(feed: any, dateISO?: string, winProbabilityFeed?: 
   const awayAbbr = abbrByMlbId(awayId) ?? "";
   const homeAbbr = abbrByMlbId(homeId) ?? "";
 
-  const status = mapStatus(game?.status?.abstractGameState, game?.status?.detailedState);
+  const status = mapStatus(
+    game?.status?.abstractGameState,
+    game?.status?.detailedState,
+  );
   const ls = live?.linescore;
 
   const summary: GameSummary = {
@@ -483,7 +553,8 @@ export function mapGameDetail(feed: any, dateISO?: string, winProbabilityFeed?: 
   if (status === "LIVE" && ls) {
     summary.inning = ls.currentInning ?? undefined;
     const halfRaw = String(ls.inningHalf ?? "").toUpperCase();
-    summary.inningHalf = halfRaw === "BOTTOM" ? "BOT" : halfRaw === "TOP" ? "TOP" : undefined;
+    summary.inningHalf =
+      halfRaw === "BOTTOM" ? "BOT" : halfRaw === "TOP" ? "TOP" : undefined;
     summary.bases = readBases(ls);
     summary.outs = ls.outs ?? 0;
     summary.balls = ls.balls ?? 0;
@@ -503,12 +574,26 @@ export function mapGameDetail(feed: any, dateISO?: string, winProbabilityFeed?: 
   const allPlays = (live?.plays?.allPlays ?? []) as any[];
   const usageByPitcher = computePitchUsageByPitcher(allPlays);
   const gameIsLive = status === "LIVE";
-  const awayPitching = decoratePitching(mapBoxPitching(box?.teams?.away), usageByPitcher, gameIsLive);
-  const homePitching = decoratePitching(mapBoxPitching(box?.teams?.home), usageByPitcher, gameIsLive);
+  const awayPitching = decoratePitching(
+    mapBoxPitching(box?.teams?.away),
+    usageByPitcher,
+    gameIsLive,
+  );
+  const homePitching = decoratePitching(
+    mapBoxPitching(box?.teams?.home),
+    usageByPitcher,
+    gameIsLive,
+  );
 
   const atBat = status === "LIVE" ? mapAtBat(feed) : null;
   const winProbability = readWinProbability(winProbabilityFeed);
-  const spray = computeBatterSprays(allPlays, awayAbbr, homeAbbr, awayId, homeId);
+  const spray = computeBatterSprays(
+    allPlays,
+    awayAbbr,
+    homeAbbr,
+    awayId,
+    homeId,
+  );
 
   return {
     summary,
@@ -530,7 +615,9 @@ export function mapGameDetail(feed: any, dateISO?: string, winProbabilityFeed?: 
  * fielder's choice, reach-on-error, sac flies, etc.) lumps into OUT — color
  * fidelity over taxonomic purity.
  */
-function classifySprayOutcome(event: string | undefined): import("./types").SprayOutcome | null {
+function classifySprayOutcome(
+  event: string | undefined,
+): import("./types").SprayOutcome | null {
   if (!event) return null;
   const e = event.toLowerCase();
   if (e.includes("home run")) return "HR";
@@ -596,7 +683,8 @@ function computeBatterSprays(
     const y = coords?.coordY;
     if (typeof x !== "number" || typeof y !== "number") continue;
 
-    const battingTeamId = p?.matchup?.batter?.parentTeamId ?? p?.matchup?.batSide?.teamId;
+    const battingTeamId =
+      p?.matchup?.batter?.parentTeamId ?? p?.matchup?.batSide?.teamId;
     const team =
       battingTeamId === awayTeamId
         ? awayAbbr
@@ -624,7 +712,12 @@ function computeBatterSprays(
       y,
       outcome,
       inning: p?.about?.inning ?? undefined,
-      half: p?.about?.halfInning === "bottom" ? "BOT" : p?.about?.halfInning === "top" ? "TOP" : undefined,
+      half:
+        p?.about?.halfInning === "bottom"
+          ? "BOT"
+          : p?.about?.halfInning === "top"
+            ? "TOP"
+            : undefined,
       event,
     });
     order++;
@@ -643,7 +736,9 @@ function computeBatterSprays(
  * a map keyed by pitcher player id → { typeCode: count }. Pitches without a
  * recognizable type code are skipped (intentional pitches, pickoffs, etc.).
  */
-function computePitchUsageByPitcher(allPlays: any[]): Map<number, Record<string, number>> {
+function computePitchUsageByPitcher(
+  allPlays: any[],
+): Map<number, Record<string, number>> {
   const out = new Map<number, Record<string, number>>();
   for (const p of allPlays) {
     const pitcherId = p?.matchup?.pitcher?.id;
@@ -692,7 +787,9 @@ function decoratePitching(
  * live feed itself does NOT carry per-play win-probability fields, so we rely
  * on this auxiliary endpoint instead.
  */
-function readWinProbability(wpFeed: any): { home: number; away: number } | null {
+function readWinProbability(
+  wpFeed: any,
+): { home: number; away: number } | null {
   const entries = Array.isArray(wpFeed) ? wpFeed : [];
   for (let i = entries.length - 1; i >= 0; i--) {
     const p = entries[i];
@@ -700,9 +797,10 @@ function readWinProbability(wpFeed: any): { home: number; away: number } | null 
     const away = p?.awayTeamWinProbability;
     if (typeof home === "number" && Number.isFinite(home)) {
       const h = Math.max(0, Math.min(100, home));
-      const a = typeof away === "number" && Number.isFinite(away)
-        ? Math.max(0, Math.min(100, away))
-        : 100 - h;
+      const a =
+        typeof away === "number" && Number.isFinite(away)
+          ? Math.max(0, Math.min(100, away))
+          : 100 - h;
       return { home: h, away: a };
     }
   }
@@ -726,12 +824,18 @@ export function mapLeaders(json: any): LeaderRow[] {
 
 function groupForPosition(posType?: string): RosterRow["group"] {
   switch ((posType ?? "").toLowerCase()) {
-    case "pitcher": return "pitchers";
-    case "catcher": return "catchers";
-    case "infielder": return "infielders";
-    case "outfielder": return "outfielders";
-    case "hitter": return "designated_hitter";
-    default: return "infielders";
+    case "pitcher":
+      return "pitchers";
+    case "catcher":
+      return "catchers";
+    case "infielder":
+      return "infielders";
+    case "outfielder":
+      return "outfielders";
+    case "hitter":
+      return "designated_hitter";
+    default:
+      return "infielders";
   }
 }
 
@@ -794,7 +898,8 @@ export function mapTeamRecord(json: any, teamMlbId: number): TeamSeasonRecord {
       if (tr?.team?.id !== teamMlbId) continue;
       const w = typeof tr.wins === "number" ? tr.wins : 0;
       const l = typeof tr.losses === "number" ? tr.losses : 0;
-      const pct = w + l > 0 ? (w / (w + l)).toFixed(3).replace(/^0/, "") : ".000";
+      const pct =
+        w + l > 0 ? (w / (w + l)).toFixed(3).replace(/^0/, "") : ".000";
       const divRankRaw = tr?.divisionRank;
       const divRank = divRankRaw ? Number(divRankRaw) : undefined;
       const divId = div?.division?.id;
@@ -802,7 +907,9 @@ export function mapTeamRecord(json: any, teamMlbId: number): TeamSeasonRecord {
         w,
         l,
         pct,
-        streak: tr?.streak?.streakCode ? String(tr.streak.streakCode) : undefined,
+        streak: tr?.streak?.streakCode
+          ? String(tr.streak.streakCode)
+          : undefined,
         divRank: Number.isFinite(divRank) ? divRank : undefined,
         divName: typeof divId === "number" ? DIVISION_LABEL[divId] : undefined,
       };
@@ -820,7 +927,10 @@ export function mapTeamLastGames(json: any, ourAbbr: string): TeamLastGame[] {
   for (const d of dates) {
     const dateISO: string = d?.date ?? "";
     for (const g of d?.games ?? []) {
-      const status = mapStatus(g?.status?.abstractGameState, g?.status?.detailedState);
+      const status = mapStatus(
+        g?.status?.abstractGameState,
+        g?.status?.detailedState,
+      );
       if (status !== "FINAL") continue;
       const awayId = g?.teams?.away?.team?.id;
       const homeId = g?.teams?.home?.team?.id;
@@ -848,17 +958,24 @@ export function mapTeamLastGames(json: any, ourAbbr: string): TeamLastGame[] {
 }
 
 /** Pull the season totals stat object for a hitting/pitching group from
- *  `/teams/stats?sportId=1&group=hitting,pitching&stats=season&teamId={id}`.
+ *  `/teams/{id}/stats?sportId=1&group=hitting,pitching&stats=season`.
  *  MLB returns one `stats[]` entry per group, each with a single split row. */
-export function mapTeamSeasonStats(json: any, group: "hitting" | "pitching"): TeamSeasonStats {
+export function mapTeamSeasonStats(
+  json: any,
+  group: "hitting" | "pitching",
+): TeamSeasonStats {
   const groups = json?.stats ?? [];
-  const g = groups.find((x: any) => x?.group?.displayName?.toLowerCase() === group);
+  const g = groups.find(
+    (x: any) => x?.group?.displayName?.toLowerCase() === group,
+  );
   const split = g?.splits?.[0];
   const stat = split?.stat ?? {};
+  // console.log("******************************");
+  // console.log(stat);
   return { ...stat };
 }
 
-/** MLB `/stats/leaders` returns `leagueLeaders[]` — one entry per
+/** MLB `/teams/{id}/leaders` returns `teamLeaders[]` — one entry per
  *  leaderCategory. Each contains the same per-row shape `mapLeaders` already
  *  handles. We bundle them by our display label (AVG/HR/RBI/...) and slice
  *  each to the top-N. */
@@ -877,9 +994,12 @@ const LEADER_CATEGORY_MAP: Record<string, string> = {
   saves: "SV",
 };
 
-export function mapTeamLeaders(json: any, topN = 3): Record<string, LeaderRow[]> {
+export function mapTeamLeaders(
+  json: any,
+  topN = 3,
+): Record<string, LeaderRow[]> {
   const out: Record<string, LeaderRow[]> = {};
-  const groups = json?.leagueLeaders ?? [];
+  const groups = json?.teamLeaders ?? [];
   for (const g of groups) {
     const rawCat = String(g?.leaderCategory ?? "");
     const label = LEADER_CATEGORY_MAP[rawCat];
@@ -934,7 +1054,9 @@ export function mapFrontOffice(json: any): PersonnelRow[] {
 
 /* ── Player ──────────────────────────────────────────────────────────────── */
 
-function pickStatRow(splits: any[] | undefined): Record<string, string | number> | undefined {
+function pickStatRow(
+  splits: any[] | undefined,
+): Record<string, string | number> | undefined {
   if (!splits || splits.length === 0) return undefined;
   // Prefer the row without team/team.sport context (the season totals across teams)
   // Otherwise the first split.
@@ -944,10 +1066,16 @@ function pickStatRow(splits: any[] | undefined): Record<string, string | number>
 
 export function mapPlayer(person: any, statsJson: any): PlayerDetailData {
   const groups = statsJson?.stats ?? [];
-  const hittingGroup = groups.find((g: any) => g?.group?.displayName?.toLowerCase() === "hitting");
-  const pitchingGroup = groups.find((g: any) => g?.group?.displayName?.toLowerCase() === "pitching");
+  const hittingGroup = groups.find(
+    (g: any) => g?.group?.displayName?.toLowerCase() === "hitting",
+  );
+  const pitchingGroup = groups.find(
+    (g: any) => g?.group?.displayName?.toLowerCase() === "pitching",
+  );
 
-  const teamAbbr = person?.currentTeam?.id ? abbrByMlbId(person.currentTeam.id) : null;
+  const teamAbbr = person?.currentTeam?.id
+    ? abbrByMlbId(person.currentTeam.id)
+    : null;
 
   return {
     id: person?.id ?? 0,
@@ -979,12 +1107,23 @@ const SPLIT_LABELS: Record<string, string> = {
   risp: "RISP",
 };
 // For pitchers we drop RISP (pitcher RISP splits aren't surfaced cleanly by the API).
-export const SPLIT_ORDER_HITTING: string[] = ["vr", "vl", "h", "a", "d", "n", "risp"];
+export const SPLIT_ORDER_HITTING: string[] = [
+  "vr",
+  "vl",
+  "h",
+  "a",
+  "d",
+  "n",
+  "risp",
+];
 export const SPLIT_ORDER_PITCHING: string[] = ["vr", "vl", "h", "a", "d", "n"];
 /** Legacy export retained for back-compat; defaults to hitting order. */
 export const SPLIT_ORDER = SPLIT_ORDER_HITTING;
 
-export function mapPlayerSplits(json: any, mode: StatMode = "hitting"): PlayerSplitRow[] {
+export function mapPlayerSplits(
+  json: any,
+  mode: StatMode = "hitting",
+): PlayerSplitRow[] {
   const splits = (json?.stats?.[0]?.splits ?? []) as any[];
   const byCode: Record<string, PlayerSplitRow> = {};
   for (const s of splits) {
@@ -1001,13 +1140,17 @@ export function mapPlayerSplits(json: any, mode: StatMode = "hitting"): PlayerSp
     }
     byCode[code] = row;
   }
-  const order = mode === "pitching" ? SPLIT_ORDER_PITCHING : SPLIT_ORDER_HITTING;
+  const order =
+    mode === "pitching" ? SPLIT_ORDER_PITCHING : SPLIT_ORDER_HITTING;
   return order.map((c) => byCode[c]).filter((r): r is PlayerSplitRow => !!r);
 }
 
 /* ── Player game log ─────────────────────────────────────────────────────── */
 
-export function mapPlayerGameLog(json: any, mode: StatMode = "hitting"): PlayerGameLogRow[] {
+export function mapPlayerGameLog(
+  json: any,
+  mode: StatMode = "hitting",
+): PlayerGameLogRow[] {
   const splits = (json?.stats?.[0]?.splits ?? []) as any[];
   const out: PlayerGameLogRow[] = [];
   for (const s of splits) {
@@ -1061,25 +1204,26 @@ const EXCLUDED_AWARD_PATTERNS: RegExp[] = [
 /** Patterns for major MLB awards we want to surface as "career highlights".
     Note: World Series MVP is matched first so it doesn't fall through to the generic MVP rule. */
 const AWARD_PATTERNS: { re: RegExp; display: string }[] = [
-  { re: /World Series MVP/i,                       display: "World Series MVP" },
+  { re: /World Series MVP/i, display: "World Series MVP" },
   // MLB MVP: API returns either "AL MVP"/"NL MVP" or "Most Valuable Player"
-  { re: /^(?:AL|NL)\s+MVP\b/i,                     display: "MVP" },
-  { re: /\bMost Valuable Player\b/i,               display: "MVP" },
-  { re: /Cy Young/i,                               display: "Cy Young" },
-  { re: /Rookie of the Year/i,                     display: "Rookie of the Year" },
+  { re: /^(?:AL|NL)\s+MVP\b/i, display: "MVP" },
+  { re: /\bMost Valuable Player\b/i, display: "MVP" },
+  { re: /Cy Young/i, display: "Cy Young" },
+  { re: /Rookie of the Year/i, display: "Rookie of the Year" },
   // Major-league All-Star only: prefixed with AL/NL/MLB, or a plain "All-Star Game"
-  { re: /^(?:AL|NL|MLB)\s+All[- ]Star/i,           display: "All-Star" },
-  { re: /^All[- ]Star Game/i,                      display: "All-Star" },
-  { re: /Platinum Glove/i,                         display: "Platinum Glove" },
-  { re: /Gold Glove/i,                             display: "Gold Glove" },
-  { re: /Silver Slugger/i,                         display: "Silver Slugger" },
-  { re: /All-MLB First Team/i,                     display: "All-MLB First Team" },
-  { re: /All-MLB Second Team/i,                    display: "All-MLB Second Team" },
+  { re: /^(?:AL|NL|MLB)\s+All[- ]Star/i, display: "All-Star" },
+  { re: /^All[- ]Star Game/i, display: "All-Star" },
+  { re: /Platinum Glove/i, display: "Platinum Glove" },
+  { re: /Gold Glove/i, display: "Gold Glove" },
+  { re: /Silver Slugger/i, display: "Silver Slugger" },
+  { re: /All-MLB First Team/i, display: "All-MLB First Team" },
+  { re: /All-MLB Second Team/i, display: "All-MLB Second Team" },
 ];
 
 function matchAward(name: string): string | null {
   if (EXCLUDED_AWARD_PATTERNS.some((re) => re.test(name))) return null;
-  for (const { re, display } of AWARD_PATTERNS) if (re.test(name)) return display;
+  for (const { re, display } of AWARD_PATTERNS)
+    if (re.test(name)) return display;
   return null;
 }
 
@@ -1096,15 +1240,15 @@ function mapYears(json: any, mode: StatMode): PlayerHistoryYear[] {
       g: stat.gamesPlayed ?? 0,
     };
     if (mode === "pitching") {
-      base.w    = stat.wins ?? 0;
-      base.l    = stat.losses ?? 0;
-      base.era  = String(stat.era ?? "");
-      base.ip   = String(stat.inningsPitched ?? "0.0");
-      base.k    = stat.strikeOuts ?? 0;
+      base.w = stat.wins ?? 0;
+      base.l = stat.losses ?? 0;
+      base.era = String(stat.era ?? "");
+      base.ip = String(stat.inningsPitched ?? "0.0");
+      base.k = stat.strikeOuts ?? 0;
       base.whip = String(stat.whip ?? "");
     } else {
-      base.ab  = stat.atBats ?? 0;
-      base.hr  = stat.homeRuns ?? 0;
+      base.ab = stat.atBats ?? 0;
+      base.hr = stat.homeRuns ?? 0;
       base.rbi = stat.rbi ?? 0;
       base.avg = String(stat.avg ?? "");
       base.ops = String(stat.ops ?? "");
@@ -1115,7 +1259,11 @@ function mapYears(json: any, mode: StatMode): PlayerHistoryYear[] {
   return years;
 }
 
-function mapCareer(json: any, years: PlayerHistoryYear[], mode: StatMode): PlayerCareerTotals {
+function mapCareer(
+  json: any,
+  years: PlayerHistoryYear[],
+  mode: StatMode,
+): PlayerCareerTotals {
   const stat = (json?.stats?.[0]?.splits ?? [])[0]?.stat ?? {};
   const seasons = new Set(years.map((y) => y.year)).size;
   const yearRange = years.length
@@ -1127,15 +1275,15 @@ function mapCareer(json: any, years: PlayerHistoryYear[], mode: StatMode): Playe
     yearRange,
   };
   if (mode === "pitching") {
-    totals.w    = stat.wins ?? 0;
-    totals.l    = stat.losses ?? 0;
-    totals.era  = String(stat.era ?? "");
-    totals.ip   = String(stat.inningsPitched ?? "0.0");
-    totals.k    = stat.strikeOuts ?? 0;
+    totals.w = stat.wins ?? 0;
+    totals.l = stat.losses ?? 0;
+    totals.era = String(stat.era ?? "");
+    totals.ip = String(stat.inningsPitched ?? "0.0");
+    totals.k = stat.strikeOuts ?? 0;
     totals.whip = String(stat.whip ?? "");
   } else {
-    totals.ab  = stat.atBats ?? 0;
-    totals.hr  = stat.homeRuns ?? 0;
+    totals.ab = stat.atBats ?? 0;
+    totals.hr = stat.homeRuns ?? 0;
     totals.rbi = stat.rbi ?? 0;
     totals.avg = String(stat.avg ?? "");
     totals.ops = String(stat.ops ?? "");
@@ -1154,16 +1302,24 @@ function mapHighlights(awardsJson: any): PlayerHighlight[] {
     if (!Number.isFinite(season)) continue;
     (seasonsByName[display] ||= new Set()).add(season);
   }
-  const out: PlayerHighlight[] = Object.entries(seasonsByName).map(([name, seasons]) => ({
-    name,
-    count: seasons.size,
-    mostRecentYear: Math.max(...seasons),
-  }));
+  const out: PlayerHighlight[] = Object.entries(seasonsByName).map(
+    ([name, seasons]) => ({
+      name,
+      count: seasons.size,
+      mostRecentYear: Math.max(...seasons),
+    }),
+  );
   // Show most prestigious / most recent first.
   const priority: Record<string, number> = {
-    "MVP": 1, "Cy Young": 2, "World Series MVP": 3,
-    "Rookie of the Year": 4, "All-MLB First Team": 5, "All-Star": 6,
-    "Gold Glove": 7, "Platinum Glove": 8, "Silver Slugger": 9,
+    MVP: 1,
+    "Cy Young": 2,
+    "World Series MVP": 3,
+    "Rookie of the Year": 4,
+    "All-MLB First Team": 5,
+    "All-Star": 6,
+    "Gold Glove": 7,
+    "Platinum Glove": 8,
+    "Silver Slugger": 9,
     "All-MLB Second Team": 10,
   };
   out.sort((a, b) => {
