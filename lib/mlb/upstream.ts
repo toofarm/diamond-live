@@ -6,7 +6,10 @@
 
 const BASE = "https://statsapi.mlb.com/api/v1";
 
-export async function mlb<T>(path: string, opts: { revalidate?: number } = {}): Promise<T> {
+export async function mlb<T>(
+  path: string,
+  opts: { revalidate?: number } = {},
+): Promise<T> {
   const url = path.startsWith("http") ? path : `${BASE}${path}`;
   const res = await fetch(url, {
     next: { revalidate: opts.revalidate ?? 60 },
@@ -15,5 +18,6 @@ export async function mlb<T>(path: string, opts: { revalidate?: number } = {}): 
   if (!res.ok) {
     throw new Error(`MLB API ${res.status} ${res.statusText}: ${path}`);
   }
-  return (await res.json()) as T;
+  const r = await res.json();
+  return r as T;
 }

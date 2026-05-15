@@ -17,8 +17,18 @@ import type {
 
 // We tell `/stats/leaders` which MLB category strings map to our display labels.
 // Order matters only for cache predictability; mapTeamLeaders looks up by name.
-const BATTING_LEADER_CATS = ["battingAverage", "homeRuns", "rbi", "onBasePlusSlugging"] as const;
-const PITCHING_LEADER_CATS = ["earnedRunAverage", "wins", "strikeouts", "saves"] as const;
+const BATTING_LEADER_CATS = [
+  "battingAverage",
+  "homeRuns",
+  "rbi",
+  "onBasePlusSlugging",
+] as const;
+const PITCHING_LEADER_CATS = [
+  "earnedRunAverage",
+  "wins",
+  "strikeouts",
+  "saves",
+] as const;
 
 /**
  * GET /api/mlb/team/[teamAbbr]/season
@@ -29,18 +39,26 @@ const PITCHING_LEADER_CATS = ["earnedRunAverage", "wins", "strikeouts", "saves"]
  * default to safe-empty values for any sub-payload that fails or comes back
  * malformed.
  */
-export async function GET(_: Request, { params }: { params: Promise<{ teamAbbr: string }> }) {
+export async function GET(
+  _: Request,
+  { params }: { params: Promise<{ teamAbbr: string }> },
+) {
   const { teamAbbr } = await params;
   const team = TEAMS[teamAbbr];
   if (!team) {
-    return Response.json({ error: `Unknown team ${teamAbbr}` }, { status: 404 });
+    return Response.json(
+      { error: `Unknown team ${teamAbbr}` },
+      { status: 404 },
+    );
   }
 
   const season = currentSeason();
   const today = new Date();
   const start = toISO(addDays(today, -30));
   const end = toISO(today);
-  const leaderCats = [...BATTING_LEADER_CATS, ...PITCHING_LEADER_CATS].join(",");
+  const leaderCats = [...BATTING_LEADER_CATS, ...PITCHING_LEADER_CATS].join(
+    ",",
+  );
 
   // Parallel fan-out. `Promise.allSettled` so a single upstream hiccup leaves
   // the rest of the tab usable rather than turning the whole page red.
@@ -48,27 +66,29 @@ export async function GET(_: Request, { params }: { params: Promise<{ teamAbbr: 
   // The record comes from `/standings` (not `/teams/{id}?hydrate=record`) —
   // the team-endpoint hydrate path returns an empty record block, which is
   // why the original implementation silently rendered 0–0 / .000.
-  const [recordRes, scheduleRes, statsRes, leadersRes] = await Promise.allSettled([
-    mlb<unknown>(
-      `/standings?leagueId=103,104&season=${season}&standingsTypes=regularSeason`,
-      { revalidate: 300 },
-    ),
-    mlb<unknown>(
-      `/schedule?sportId=1&teamId=${team.mlbId}&startDate=${start}&endDate=${end}`,
-      { revalidate: 300 },
-    ),
-    mlb<unknown>(
-      `/teams/stats?sportId=1&group=hitting,pitching&stats=season&season=${season}&teamId=${team.mlbId}`,
-      { revalidate: 300 },
-    ),
-    mlb<unknown>(
-      `/stats/leaders?leaderCategories=${leaderCats}&season=${season}&sportId=1&teamId=${team.mlbId}&leaderGameTypes=R&limit=10`,
-      { revalidate: 300 },
-    ),
-  ]);
+  const [recordRes, scheduleRes, statsRes, leadersRes] =
+    await Promise.allSettled([
+      mlb<unknown>(
+        `/standings?leagueId=103,104&season=${season}&standingsTypes=regularSeason`,
+        { revalidate: 300 },
+      ),
+      mlb<unknown>(
+        `/schedule?sportId=1&teamId=${team.mlbId}&startDate=${start}&endDate=${end}`,
+        { revalidate: 300 },
+      ),
+      mlb<unknown>(
+        `/teams/${team.mlbId}/stats?sportId=1&group=hitting,pitching&stats=season&season=${season}`,
+        { revalidate: 300 },
+      ),
+      mlb<unknown>(
+        `/teams/${team.mlbId}/leaders?leaderCategories=${leaderCats}&season=${season}&leaderGameTypes=R&limit=10`,
+        { revalidate: 300 },
+      ),
+    ]);
 
   const recordJson = recordRes.status === "fulfilled" ? recordRes.value : {};
-  const scheduleJson = scheduleRes.status === "fulfilled" ? scheduleRes.value : {};
+  const scheduleJson =
+    scheduleRes.status === "fulfilled" ? scheduleRes.value : {};
   const statsJson = statsRes.status === "fulfilled" ? statsRes.value : {};
   const leadersJson = leadersRes.status === "fulfilled" ? leadersRes.value : {};
 
@@ -93,5 +113,5 @@ export async function GET(_: Request, { params }: { params: Promise<{ teamAbbr: 
     },
   };
 
-  return Response.json(body, { headers: CACHE_HEADERS.STATIC_5M });
+  return Response.json(body, { headers: CACHE_HEADERS.LIVE });
 }

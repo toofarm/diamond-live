@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useApi } from "@/lib/mlb/client";
 import type {
   PersonnelData,
@@ -13,8 +13,11 @@ import type {
 } from "@/lib/mlb/types";
 import { TEAMS } from "@/lib/mlb/teams";
 import { BackChevron, Loader, TeamBadge } from "@/components/ui/primitives";
+import { ComparePicker, type CompareItem } from "@/components/ui/ComparePicker";
 import { currentSeason, formatDateLabel } from "@/lib/date";
 import { useTitle } from "@/lib/title";
+import { useCompareParam } from "@/lib/mlb/useCompareParam";
+import { pickWinner } from "@/lib/mlb/statDirection";
 
 type SubTab = "season" | "roster" | "injuries" | "personnel";
 
@@ -186,6 +189,42 @@ function SeasonTab({
     { cacheMs: 300_000 },
   );
 
+  // Comparison state. Treat self-compare as "no comparison" — don't fire a
+  // duplicate season fetch and don't render the third column.
+  const { compareId, setCompare, clearCompare } = useCompareParam();
+  const compareAbbr = compareId && compareId !== abbr ? compareId : null;
+  const [query, setQuery] = useState("");
+
+  const { data: compareData, fetching: compareFetching } = useApi<TeamSeasonData>(
+    compareAbbr ? `/api/mlb/team/${compareAbbr}/season` : null,
+    { cacheMs: 300_000 },
+  );
+
+  const items: CompareItem[] = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return Object.values(TEAMS)
+      .filter((t) => t.abbr !== abbr)
+      .filter(
+        (t) =>
+          !q ||
+          `${t.city} ${t.name}`.toLowerCase().includes(q) ||
+          t.abbr.toLowerCase().includes(q),
+      )
+      .map((t) => ({
+        id: t.abbr,
+        label: `${t.city} ${t.name}`,
+        sublabel: t.div,
+        badge: <TeamBadge abbr={t.abbr} size={20} />,
+      }));
+  }, [abbr, query]);
+
+  const selectedTeam = compareAbbr ? TEAMS[compareAbbr] : undefined;
+  const selectedLabel = selectedTeam
+    ? `${selectedTeam.city} ${selectedTeam.name}`
+    : compareAbbr ?? undefined;
+  const compareLabel = compareAbbr ?? undefined;
+  const compareLoading = !!compareAbbr && compareFetching && !compareData;
+
   if (loading && !data) return <Loader />;
   if (error) return <div className="p-6 text-neg">Failed to load season data.</div>;
   if (!data) return null;
@@ -194,14 +233,48 @@ function SeasonTab({
     <div data-cy="season-tab" className="flex flex-col gap-3.5">
       <RecordCard record={data.record} />
       <LastGamesTable games={data.lastGames} onGame={onGame} />
+      <ComparePicker
+        items={items}
+        query={query}
+        onQueryChange={setQuery}
+        selectedId={compareAbbr}
+        selectedLabel={selectedLabel}
+        onSelect={(id) => {
+          setCompare(id);
+          setQuery("");
+        }}
+        onClear={() => {
+          clearCompare();
+          setQuery("");
+        }}
+        placeholder="Compare to another team…"
+      />
       <StatSection title="Team Batting" subtitle={`${currentSeason()} Season`}>
         {TEAM_BATTING_GROUPS.map((g) => (
-          <StatGroupBlock key={g.title} group={g} stats={data.stats.batting} />
+          <StatGroupBlock
+            key={g.title}
+            group={g}
+            stats={data.stats.batting}
+            compareStats={compareData?.stats.batting}
+            primaryLabel={abbr}
+            compareLabel={compareLabel}
+            compareLoading={compareLoading}
+            mode="batting"
+          />
         ))}
       </StatSection>
       <StatSection title="Team Pitching" subtitle={`${currentSeason()} Season`}>
         {TEAM_PITCHING_GROUPS.map((g) => (
-          <StatGroupBlock key={g.title} group={g} stats={data.stats.pitching} />
+          <StatGroupBlock
+            key={g.title}
+            group={g}
+            stats={data.stats.pitching}
+            compareStats={compareData?.stats.pitching}
+            primaryLabel={abbr}
+            compareLabel={compareLabel}
+            compareLoading={compareLoading}
+            mode="pitching"
+          />
         ))}
       </StatSection>
     </div>
@@ -332,31 +405,82 @@ function StatSection({
   );
 }
 
-function StatGroupBlock({ group, stats }: { group: StatGroupDef; stats: TeamSeasonStats }) {
+function StatGroupBlock({
+  group,
+  stats,
+  compareStats,
+  primaryLabel,
+  compareLabel,
+  compareLoading,
+  mode,
+}: {
+  group: StatGroupDef;
+  stats: TeamSeasonStats;
+  compareStats?: TeamSeasonStats;
+  primaryLabel?: string;
+  compareLabel?: string;
+  compareLoading?: boolean;
+  mode: "batting" | "pitching";
+}) {
   const rows = group.rows.filter(
     ([k]) => stats[k] !== undefined && stats[k] !== "" && stats[k] !== null,
   );
   if (rows.length === 0) return null;
+  const comparing = !!compareLabel;
+  const cols = comparing ? "1fr 72px 72px" : "1fr auto";
   return (
     <div className="border-b border-line-2 last:border-b-0">
       <div className="px-3.5 md:px-4 pt-3 pb-1.5">
-        <div className="font-ui text-[10px] font-bold tracking-[1.2px] uppercase text-ink-3">
-          {group.title}
-        </div>
-      </div>
-      {rows.map(([key, label], i) => (
-        <div
-          key={key}
-          className={`flex items-center px-3.5 md:px-4 py-2.5 ${
-            i === rows.length - 1 ? "" : "border-b border-line-2"
-          }`}
-        >
-          <div className="flex-1 font-ui text-[13px] text-ink">{label}</div>
-          <div className="font-mono text-[14px] font-semibold text-ink tracking-[-0.2px]">
-            <StatValue value={stats[key]} />
+        {comparing ? (
+          <div
+            className="grid items-baseline"
+            style={{ gridTemplateColumns: cols }}
+          >
+            <div className="font-ui text-[10px] font-bold tracking-[1.2px] uppercase text-ink-3">
+              {group.title}
+            </div>
+            <div className="font-mono text-[10px] font-bold tracking-[0.8px] uppercase text-ink-3 text-right">
+              {primaryLabel}
+            </div>
+            <div className="font-mono text-[10px] font-bold tracking-[0.8px] uppercase text-ink-3 text-right">
+              {compareLabel}
+            </div>
           </div>
-        </div>
-      ))}
+        ) : (
+          <div className="font-ui text-[10px] font-bold tracking-[1.2px] uppercase text-ink-3">
+            {group.title}
+          </div>
+        )}
+      </div>
+      {rows.map(([key, label], i) => {
+        const compareVal = compareStats?.[key];
+        const winner = comparing ? pickWinner(key, stats[key], compareVal, mode) : null;
+        const primaryCls = `font-mono text-[14px] tracking-[-0.2px] text-right ${
+          winner === "a" ? "font-bold text-accent" : "font-semibold text-ink"
+        }`;
+        const compareCls = `font-mono text-[14px] tracking-[-0.2px] text-right ${
+          winner === "b" ? "font-bold text-accent" : "font-semibold text-ink"
+        }`;
+        return (
+          <div
+            key={key}
+            className={`grid items-center px-3.5 md:px-4 py-2.5 ${
+              i === rows.length - 1 ? "" : "border-b border-line-2"
+            }`}
+            style={{ gridTemplateColumns: cols }}
+          >
+            <div className="font-ui text-[13px] text-ink">{label}</div>
+            <div data-cy={comparing ? "stat-primary-value" : undefined} className={primaryCls}>
+              <StatValue value={stats[key]} />
+            </div>
+            {comparing && (
+              <div data-cy="stat-compare-value" className={compareCls}>
+                {compareLoading ? <>—</> : <StatValue value={compareVal} />}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

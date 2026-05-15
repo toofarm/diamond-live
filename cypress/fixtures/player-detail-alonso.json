@@ -1,0 +1,31 @@
+{
+  "id": 660271,
+  "fullName": "Pete Alonso",
+  "team": "NYM",
+  "position": "1B",
+  "bats": "R",
+  "throws": "R",
+  "num": "20",
+  "age": 31,
+  "height": "6' 3\"",
+  "weight": 245,
+  "birthCity": "Tampa",
+  "birthCountry": "USA",
+  "hitting": {
+    "gamesPlayed": 39,
+    "atBats": 152,
+    "hits": 41,
+    "doubles": 9,
+    "triples": 0,
+    "homeRuns": 12,
+    "runs": 27,
+    "rbi": 33,
+    "baseOnBalls": 18,
+    "strikeOuts": 41,
+    "stolenBases": 0,
+    "avg": ".270",
+    "obp": ".351",
+    "slg": ".559",
+    "ops": ".910"
+  }
+}
