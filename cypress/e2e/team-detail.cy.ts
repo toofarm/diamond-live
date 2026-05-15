@@ -94,4 +94,66 @@ describe("/team/[abbr]", () => {
     cy.get('[data-cy="last-game-row"][data-cy-game-id="8001"]').click();
     cy.location("pathname").should("eq", "/game/8001");
   });
+
+  // Added 2026-05-15 for the Season-tab comparison feature.
+  context("Season tab → compare", () => {
+    beforeEach(() => {
+      // Comparison target: Atlanta's season data, distinct numbers so the
+      // winner-highlight assertions have something to bite on.
+      cy.intercept("GET", "/api/mlb/team/ATL/season*", { fixture: "team-season-atl.json" }).as("compareSeason");
+    });
+
+    it("focus the compare picker → tray opens and excludes the focal team", () => {
+      cy.get('[data-cy="compare-picker"] [data-cy="compare-input"]').focus();
+      cy.get('[data-cy="compare-tray"]').should("be.visible");
+      // Self-exclusion: NYM (the team being viewed) does not appear in the tray.
+      cy.get('[data-cy="compare-option"][data-cy-id="NYM"]').should("not.exist");
+      cy.get('[data-cy="compare-option"][data-cy-id="ATL"]').should("exist");
+    });
+
+    it("type 'atl' → tray filters to Atlanta Braves", () => {
+      cy.get('[data-cy="compare-picker"] [data-cy="compare-input"]').type("atl");
+      cy.get('[data-cy="compare-option"]').should("have.length.at.least", 1);
+      cy.get('[data-cy="compare-option"][data-cy-id="ATL"]').should("contain", "Atlanta");
+    });
+
+    it("select Atlanta → URL gets ?compare=ATL and stat tables show a third column", () => {
+      cy.get('[data-cy="compare-picker"] [data-cy="compare-input"]').type("atl");
+      cy.get('[data-cy="compare-option"][data-cy-id="ATL"]').click();
+      cy.wait("@compareSeason");
+      cy.location("search").should("contain", "compare=ATL");
+      // Primary + compare cells now render in batting/pitching tables.
+      cy.get('[data-cy="stat-primary-value"]').should("exist");
+      cy.get('[data-cy="stat-compare-value"]').should("exist");
+    });
+
+    it("ATL's lower ERA highlights the compare cell with text-accent", () => {
+      cy.get('[data-cy="compare-picker"] [data-cy="compare-input"]').type("atl");
+      cy.get('[data-cy="compare-option"][data-cy-id="ATL"]').click();
+      cy.wait("@compareSeason");
+      // ATL ERA (3.10) is lower than NYM (3.42); lower wins for ERA, so the
+      // compare cell on the ERA row should carry the accent class.
+      cy.contains("ERA")
+        .parents(".grid")
+        .first()
+        .find('[data-cy="stat-compare-value"]')
+        .should("have.class", "text-accent");
+    });
+
+    it("clear button → removes ?compare and collapses third column", () => {
+      cy.get('[data-cy="compare-picker"] [data-cy="compare-input"]').type("atl");
+      cy.get('[data-cy="compare-option"][data-cy-id="ATL"]').click();
+      cy.wait("@compareSeason");
+      cy.get('[data-cy="compare-clear"]').click();
+      cy.location("search").should("not.contain", "compare=");
+      cy.get('[data-cy="stat-compare-value"]').should("not.exist");
+    });
+
+    it("deep link /team/NYM?compare=ATL → comparison restored on load", () => {
+      cy.visitAsUser("/team/NYM?compare=ATL");
+      cy.wait("@season");
+      cy.wait("@compareSeason");
+      cy.get('[data-cy="stat-compare-value"]').should("exist");
+    });
+  });
 });

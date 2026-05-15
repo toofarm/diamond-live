@@ -1,0 +1,12 @@
+{
+  "season": 2026,
+  "players": [
+    { "id": 660271, "fullName": "Pete Alonso",       "team": "NYM", "position": "1B", "mode": "hitting"  },
+    { "id": 596019, "fullName": "Francisco Lindor",  "team": "NYM", "position": "SS", "mode": "hitting"  },
+    { "id": 624415, "fullName": "Jeff McNeil",       "team": "NYM", "position": "2B", "mode": "hitting"  },
+    { "id": 624413, "fullName": "Brandon Nimmo",     "team": "NYM", "position": "LF", "mode": "hitting"  },
+    { "id": 605135, "fullName": "Kodai Senga",       "team": "NYM", "position": "SP", "mode": "pitching" },
+    { "id": 657042, "fullName": "Jose Quintana",     "team": "NYM", "position": "SP", "mode": "pitching" },
+    { "id": 657277, "fullName": "Adam Ottavino",     "team": "NYM", "position": "RP", "mode": "pitching" }
+  ]
+}

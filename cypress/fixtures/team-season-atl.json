@@ -1,0 +1,54 @@
+{
+  "record": {
+    "w": 24,
+    "l": 15,
+    "pct": ".615",
+    "streak": "W3",
+    "divRank": 1,
+    "divName": "NL East"
+  },
+  "lastGames": [
+    { "id": 9001, "dateISO": "2026-05-11", "opp": "NYM", "home": true,  "result": "W", "score": { "us": 5, "them": 3 } },
+    { "id": 9002, "dateISO": "2026-05-10", "opp": "NYM", "home": true,  "result": "L", "score": { "us": 4, "them": 7 } },
+    { "id": 9003, "dateISO": "2026-05-09", "opp": "NYM", "home": true,  "result": "L", "score": { "us": 2, "them": 6 } },
+    { "id": 9004, "dateISO": "2026-05-08", "opp": "WSH", "home": false, "result": "W", "score": { "us": 6, "them": 1 } },
+    { "id": 9005, "dateISO": "2026-05-07", "opp": "WSH", "home": false, "result": "W", "score": { "us": 8, "them": 4 } }
+  ],
+  "leaders": {
+    "batting": { "AVG": [], "HR": [], "RBI": [], "OPS": [] },
+    "pitching": { "ERA": [], "W": [], "K": [], "SV": [] }
+  },
+  "stats": {
+    "batting": {
+      "avg": ".278",
+      "obp": ".351",
+      "slg": ".455",
+      "ops": ".806",
+      "gamesPlayed": 39,
+      "atBats": 1342,
+      "hits": 373,
+      "doubles": 74,
+      "triples": 4,
+      "homeRuns": 48,
+      "runs": 198,
+      "rbi": 189,
+      "baseOnBalls": 138,
+      "strikeOuts": 298,
+      "stolenBases": 22
+    },
+    "pitching": {
+      "era": "3.10",
+      "whip": "1.14",
+      "strikeoutsPer9Inn": "9.6",
+      "walksPer9Inn": "2.7",
+      "wins": 24,
+      "losses": 15,
+      "saves": 14,
+      "holds": 31,
+      "gamesPlayed": 39,
+      "gamesStarted": 39,
+      "inningsPitched": "352.0",
+      "strikeOuts": 376
+    }
+  }
+}

@@ -11,6 +11,11 @@ describe("/player/[id]", () => {
     cy.intercept("GET", "/api/mlb/player/596019/splits*",        { fixture: "player-splits-hitting.json" }).as("splits");
     cy.intercept("GET", "/api/mlb/player/596019/gamelog*",       { fixture: "player-gamelog-hitting.json" }).as("gamelog");
     cy.intercept("GET", "/api/mlb/player/596019/history*",       { fixture: "player-history-hitting.json" }).as("history");
+    // The Season tab is mounted on first paint and fetches /api/mlb/players
+    // for the compare picker's directory. Register the intercept up here so
+    // the request is captured before it fires — otherwise tests in the
+    // comparison context race the initial paint.
+    cy.intercept("GET", "/api/mlb/players*",                     { fixture: "active-players.json" }).as("directory");
     cy.visitAsUser("/player/596019");
     cy.wait("@player");
   });
@@ -54,5 +59,60 @@ describe("/player/[id]", () => {
   it("click team chip in hero → navigates to /team/NYM", () => {
     cy.get('[data-cy="player-team-chip"]').click();
     cy.location("pathname").should("eq", "/team/NYM");
+  });
+
+  // Added 2026-05-15 for the Season-tab comparison feature.
+  context("Season tab → compare", () => {
+    beforeEach(() => {
+      // `@directory` (the /api/mlb/players intercept) is registered in the
+      // outer beforeEach so the initial-paint request is captured. The
+      // compare-target intercept only fires after the user picks Alonso.
+      cy.intercept("GET", "/api/mlb/player/660271", { fixture: "player-detail-alonso.json" }).as("compare");
+      cy.wait("@directory");
+    });
+
+    it("focus picker → tray shows hitters only (pitchers filtered out for hitter focal player)", () => {
+      cy.get('[data-cy="compare-picker"] [data-cy="compare-input"]').focus();
+      cy.get('[data-cy="compare-tray"]').should("be.visible");
+      // Lindor is the focal player (hitter); the tray should include other hitters
+      // and exclude pitchers like Senga (605135) and Ottavino (657277).
+      cy.get('[data-cy="compare-option"][data-cy-id="660271"]').should("exist");
+      cy.get('[data-cy="compare-option"][data-cy-id="624415"]').should("exist");
+      cy.get('[data-cy="compare-option"][data-cy-id="605135"]').should("not.exist");
+      cy.get('[data-cy="compare-option"][data-cy-id="657277"]').should("not.exist");
+      // Self-exclusion: Lindor himself is not in the tray.
+      cy.get('[data-cy="compare-option"][data-cy-id="596019"]').should("not.exist");
+    });
+
+    it("type 'alonso' → tray filters to Pete Alonso", () => {
+      cy.get('[data-cy="compare-picker"] [data-cy="compare-input"]').type("alonso");
+      cy.get('[data-cy="compare-option"]').should("have.length", 1);
+      cy.get('[data-cy="compare-option"][data-cy-id="660271"]').should("contain", "Pete Alonso");
+    });
+
+    it("select Alonso → ?compare=660271 in URL and Batting table grows a third column", () => {
+      cy.get('[data-cy="compare-picker"] [data-cy="compare-input"]').type("alonso");
+      cy.get('[data-cy="compare-option"][data-cy-id="660271"]').click();
+      cy.wait("@compare");
+      cy.location("search").should("contain", "compare=660271");
+      cy.get('[data-cy="stat-primary-value"]').should("exist");
+      cy.get('[data-cy="stat-compare-value"]').should("exist");
+    });
+
+    it("clear → URL drops ?compare and table collapses", () => {
+      cy.get('[data-cy="compare-picker"] [data-cy="compare-input"]').type("alonso");
+      cy.get('[data-cy="compare-option"][data-cy-id="660271"]').click();
+      cy.wait("@compare");
+      cy.get('[data-cy="compare-clear"]').click();
+      cy.location("search").should("not.contain", "compare=");
+      cy.get('[data-cy="stat-compare-value"]').should("not.exist");
+    });
+
+    it("deep link /player/596019?compare=660271 → comparison restored on load", () => {
+      cy.visitAsUser("/player/596019?compare=660271");
+      cy.wait("@player");
+      cy.wait("@compare");
+      cy.get('[data-cy="stat-compare-value"]').should("exist");
+    });
   });
 });

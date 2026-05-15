@@ -6,6 +6,7 @@
 
 import { abbrByMlbId, TEAMS } from "./teams";
 import type {
+  ActivePlayerRow,
   AtBat,
   BoxLineupRow,
   BoxPitchingRow,
@@ -1341,6 +1342,36 @@ export function mapPlayerHistory(
   const career = mapCareer(careerJson, years, mode);
   const highlights = mapHighlights(awardsJson);
   return { mode, years, career, highlights };
+}
+
+/* ── Active player directory ─────────────────────────────────────────────── */
+
+const PITCHER_POSITIONS = new Set(["P", "SP", "RP", "CP"]);
+
+/** Map MLB's `/sports/1/players` response (`people[]`) into our directory
+ *  rows. Used to populate the PlayerDetail compare picker; classification
+ *  here must agree with `detectMode()` in components/screens/PlayerDetail.tsx. */
+export function mapActivePlayers(json: any): ActivePlayerRow[] {
+  const people = json?.people ?? [];
+  const rows: ActivePlayerRow[] = [];
+  for (const p of people) {
+    const id = p?.id;
+    const fullName = p?.fullName;
+    if (!id || !fullName) continue;
+    const position = p?.primaryPosition?.abbreviation ?? "";
+    const mode: StatMode = PITCHER_POSITIONS.has(position.toUpperCase())
+      ? "pitching"
+      : "hitting";
+    rows.push({
+      id,
+      fullName,
+      team: abbrByMlbId(p?.currentTeam?.id) ?? null,
+      position,
+      mode,
+    });
+  }
+  rows.sort((a, b) => a.fullName.localeCompare(b.fullName));
+  return rows;
 }
 
 /* ── Team helpers ────────────────────────────────────────────────────────── */

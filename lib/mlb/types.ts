@@ -369,3 +369,19 @@ export interface PlayerHistoryData {
   career: PlayerCareerTotals;
   highlights: PlayerHighlight[];
 }
+
+/** A single entry in the league-wide active-player directory used by the
+ *  Season-tab comparison picker. `mode` is derived from `position` and gates
+ *  pitcher-vs-hitter filtering on the client. */
+export interface ActivePlayerRow {
+  id: number;
+  fullName: string;
+  team: string | null;   // team abbr; null for free agents / unrostered
+  position: string;      // primaryPosition abbreviation, e.g. "SS", "SP"
+  mode: StatMode;
+}
+
+export interface ActivePlayersData {
+  season: number;
+  players: ActivePlayerRow[];
+}
