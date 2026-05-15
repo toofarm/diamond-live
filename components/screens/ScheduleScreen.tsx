@@ -7,6 +7,7 @@ import { TEAMS } from "@/lib/mlb/teams";
 import { formatDateLabel, formatLocalTime } from "@/lib/date";
 import { AppBar, Loader, TeamBadge } from "@/components/ui/primitives";
 import { IconChevron, IconClose, IconCheck, IconSearch } from "@/components/ui/icons";
+import { useTitle } from "@/lib/title";
 
 interface Resp {
   start: string;
@@ -27,6 +28,7 @@ export function ScheduleScreen({
   onGame: (id: number) => void;
   onTeam: (abbr: string) => void;
 }) {
+  useTitle("Schedule");
   const { data, loading, error } = useApi<Resp>("/api/mlb/schedule", { cacheMs: 60_000 });
 
   const [showPast, setShowPast] = useState(false);

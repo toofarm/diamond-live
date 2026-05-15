@@ -5,7 +5,11 @@ import type { UserProfile } from "@/lib/storage";
 
 export interface ShellState {
   user: UserProfile | null;
-  persist: (next: UserProfile) => void;
+  /** Persists a profile update. Authenticated writes go through the Supabase
+   *  RPC and return Promise<void> for proper await; localStorage writes are
+   *  effectively synchronous. Callers that don't need to defer UI can fire
+   *  without awaiting. */
+  persist: (next: UserProfile) => Promise<void>;
   toggleFollow: (abbr: string) => void;
   openManage: () => void;
   resetOnboarding: () => void;

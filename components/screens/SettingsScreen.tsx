@@ -13,6 +13,14 @@ import {
   requestPermission,
   type PermissionState,
 } from "@/lib/notifications";
+import { useTitle } from "@/lib/title";
+
+/** Discriminator for the auth-aware portions of the Settings screen. Guest
+ *  users see the upgrade-to-profile CTA; authenticated users see an Account
+ *  section with email, change-password, and sign-out affordances. */
+export type AuthInfo =
+  | { status: "guest" }
+  | { status: "authenticated"; email: string };
 
 interface SettingsScreenProps {
   name: string;
@@ -20,12 +28,16 @@ interface SettingsScreenProps {
   notifications: NotificationPrefs;
   permission: PermissionState;
   prefs: DisplayPrefs;
+  authInfo: AuthInfo;
   onUpdateName: (name: string) => void;
   onToggleFollow: (abbr: string) => void;
   onManageFollows: () => void;
   onResetOnboarding: () => void;
   onUpdateNotifications: (next: NotificationPrefs) => void;
   onUpdatePrefs: (next: DisplayPrefs) => void;
+  onSignOut: () => void;
+  onChangePassword: () => void;
+  onUpgradeToProfile: () => void;
 }
 
 export function SettingsScreen({
@@ -34,16 +46,22 @@ export function SettingsScreen({
   notifications,
   permission,
   prefs,
+  authInfo,
   onUpdateName,
   onToggleFollow,
   onManageFollows,
   onResetOnboarding,
   onUpdateNotifications,
   onUpdatePrefs,
+  onSignOut,
+  onChangePassword,
+  onUpgradeToProfile,
 }: SettingsScreenProps) {
+  useTitle("Settings");
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(name);
   const [unitsSheetOpen, setUnitsSheetOpen] = useState(false);
+  const isAuthed = authInfo.status === "authenticated";
 
   return (
     <>
@@ -83,9 +101,34 @@ export function SettingsScreen({
                 {name || "Guest"}
               </button>
             )}
-            <div className="text-[11px] text-ink-3 mt-0.5">Saved locally · Tap name to edit</div>
+            <div className="text-[11px] text-ink-3 mt-0.5">
+              {isAuthed ? "Synced to your profile · Tap name to edit" : "Saved locally · Tap name to edit"}
+            </div>
           </div>
         </div>
+
+        {/* ── Upgrade-to-profile CTA (guests only) ─────────────── */}
+        {!isAuthed && (
+          <div
+            data-cy="upgrade-cta"
+            className="mt-3 bg-surface border border-accent rounded-[14px] p-4"
+            style={{ background: "color-mix(in srgb, var(--color-accent) 4%, var(--color-surface))" }}
+          >
+            <div className="font-head text-[15px] font-bold text-ink tracking-[-0.2px]">
+              Create a profile
+            </div>
+            <p className="mt-1 text-[12px] text-ink-2 leading-relaxed">
+              Sync your follows and preferences across devices. Free, takes a minute.
+            </p>
+            <button
+              onClick={onUpgradeToProfile}
+              data-cy="upgrade-cta-button"
+              className="mt-2.5 w-full px-3 py-2.5 bg-accent text-white rounded-[10px] border-none cursor-pointer font-head text-[14px] font-semibold tracking-[-0.2px]"
+            >
+              Get started
+            </button>
+          </div>
+        )}
 
         {/* ── Following ────────────────────────────────────────── */}
         <SectionLabel>Following · {follows.length}</SectionLabel>
@@ -170,21 +213,65 @@ export function SettingsScreen({
           />
         </div>
 
-        {/* ── Reset ────────────────────────────────────────────── */}
-        <div className="mt-7">
-          <button
-            onClick={onResetOnboarding}
-            className="w-full px-3 py-3 bg-transparent border border-dashed border-line rounded-[12px] cursor-pointer font-ui text-xs font-semibold text-ink-2"
-          >
-            Reset onboarding (clear local data)
-          </button>
-        </div>
+        {/* ── Account (authenticated only) ─────────────────────── */}
+        {isAuthed && (
+          <>
+            <SectionLabel>Account</SectionLabel>
+            <div
+              data-cy="account-card"
+              className="bg-surface border border-line rounded-[14px] overflow-hidden"
+            >
+              <div className="flex items-center gap-3 px-3.5 py-3.5 border-b border-line-2">
+                <div className="flex-1 font-head text-[15px] font-semibold text-ink tracking-[-0.2px]">
+                  Email
+                </div>
+                <span
+                  data-cy="account-email"
+                  className="font-mono text-[12px] text-ink-2 overflow-hidden text-ellipsis whitespace-nowrap max-w-[200px]"
+                >
+                  {authInfo.email}
+                </span>
+              </div>
+              <button
+                data-cy="change-password"
+                onClick={onChangePassword}
+                className="w-full flex items-center gap-3 px-3.5 py-3.5 bg-transparent text-left cursor-pointer border-b border-line-2"
+              >
+                <div className="flex-1 font-head text-[15px] font-semibold text-ink tracking-[-0.2px]">
+                  Change password
+                </div>
+                <IconChevron size={16} stroke="var(--color-ink-3)" />
+              </button>
+              <button
+                data-cy="sign-out"
+                onClick={onSignOut}
+                className="w-full flex items-center gap-3 px-3.5 py-3.5 bg-transparent text-left cursor-pointer"
+              >
+                <div className="flex-1 font-head text-[15px] font-semibold text-neg tracking-[-0.2px]">
+                  Sign out
+                </div>
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ── Reset (guests only — auth users sign out instead) ── */}
+        {!isAuthed && (
+          <div className="mt-7">
+            <button
+              onClick={onResetOnboarding}
+              className="w-full px-3 py-3 bg-transparent border border-dashed border-line rounded-[12px] cursor-pointer font-ui text-xs font-semibold text-ink-2"
+            >
+              Reset onboarding (clear local data)
+            </button>
+          </div>
+        )}
 
         <div className="mt-8 flex justify-center opacity-50">
           <Wordmark />
         </div>
         <div className="text-center mt-1.5 text-ink-3 text-[11px] font-mono">
-          v0.1.1 · data via MLB Stats API
+          {process.env.NEXT_PUBLIC_APP_VERSION} · data via MLB Stats API
         </div>
       </div>
 

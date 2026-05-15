@@ -14,6 +14,7 @@ import type {
 import { TEAMS } from "@/lib/mlb/teams";
 import { BackChevron, Loader, TeamBadge } from "@/components/ui/primitives";
 import { currentSeason, formatDateLabel } from "@/lib/date";
+import { useTitle } from "@/lib/title";
 
 type SubTab = "season" | "roster" | "injuries" | "personnel";
 
@@ -42,6 +43,7 @@ interface TeamDetailProps {
 
 export function TeamDetail({ teamAbbr, onBack, onPlayer, onGame }: TeamDetailProps) {
   const t = TEAMS[teamAbbr];
+  useTitle(t ? `${t.city} ${t.name}` : teamAbbr);
   const [tab, setTab] = useState<SubTab>("season");
 
   const TABS: { id: SubTab; label: string }[] = [

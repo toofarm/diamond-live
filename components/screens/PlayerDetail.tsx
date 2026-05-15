@@ -12,6 +12,7 @@ import type {
 import { TEAMS, type Team } from "@/lib/mlb/teams";
 import { BackChevron, Loader, TeamBadge } from "@/components/ui/primitives";
 import { currentSeason } from "@/lib/date";
+import { useTitle } from "@/lib/title";
 
 type SubTab = "season" | "splits" | "gamelog" | "history";
 
@@ -130,6 +131,7 @@ export function PlayerDetail({
   const [tab, setTab] = useState<SubTab>("season");
   const team = data?.team ? TEAMS[data.team] : undefined;
   const mode: StatMode = data ? detectMode(data) : "hitting";
+  useTitle(data?.fullName);
 
   return (
     <div data-cy="player-detail" className="absolute inset-0 bg-canvas flex flex-col z-10 overflow-hidden">
@@ -139,8 +141,8 @@ export function PlayerDetail({
 
       <div className="flex-1 overflow-y-auto w-full max-w-200 mx-auto">
         {error && <div className="p-6 text-neg">Failed to load player.</div>}
-        {data && tab === "season"  && <SeasonTab data={data} />}
-        {data && tab === "splits"  && <SplitsTab  personId={personId} mode={mode} />}
+        {data && tab === "season" && <SeasonTab data={data} />}
+        {data && tab === "splits" && <SplitsTab personId={personId} mode={mode} />}
         {data && tab === "gamelog" && <GamelogTab personId={personId} mode={mode} />}
         {data && tab === "history" && <HistoryTab personId={personId} mode={mode} />}
       </div>
@@ -394,7 +396,7 @@ function SplitsTab({ personId, mode }: { personId: number; mode: StatMode }) {
     { cacheMs: 300_000 },
   );
   const rows = data?.splits ?? [];
-  const colA = mode === "pitching" ? "ERA"  : "AVG";
+  const colA = mode === "pitching" ? "ERA" : "AVG";
   const colB = mode === "pitching" ? "WHIP" : "OPS";
   const valA = (r: PlayerSplitRow) => (mode === "pitching" ? r.era : r.avg);
   const valB = (r: PlayerSplitRow) => (mode === "pitching" ? r.whip : r.ops);
@@ -409,22 +411,22 @@ function SplitsTab({ personId, mode }: { personId: number; mode: StatMode }) {
         </div>
       )}
       {rows.length > 0 && (
-        <div className="bg-surface border border-line rounded-[14px] overflow-hidden">
+        <div className="bg-surface border border-line rounded-[14px] relative">
           <div
-            className="grid items-center px-3.5 md:px-4 py-3 font-ui text-[10px] font-bold tracking-[1.2px] uppercase text-ink-3 border-b border-line-2"
+            className="grid items-center px-3.5 md:px-4 py-3 font-ui text-[10px] font-bold tracking-[1.2px] uppercase text-ink-3 border-b border-line-2
+            md:relative sticky top-0 bg-surface z-5000"
             style={{ gridTemplateColumns: "1fr 60px 60px" }}
           >
-            <div>Split</div>
-            <div className="text-right">{colA}</div>
-            <div className="text-right">{colB}</div>
+            <div className="bg-surface">Split</div>
+            <div className="text-right bg-surface">{colA}</div>
+            <div className="text-right bg-surface">{colB}</div>
           </div>
           {rows.map((r, i) => (
             <div
               key={r.code}
               data-cy="splits-row"
-              className={`grid items-center px-3.5 md:px-4 py-3 ${
-                i === rows.length - 1 ? "" : "border-b border-line-2"
-              }`}
+              className={`grid items-center px-3.5 md:px-4 py-3 ${i === rows.length - 1 ? "" : "border-b border-line-2"
+                }`}
               style={{ gridTemplateColumns: "1fr 60px 60px" }}
             >
               <div className="font-ui text-[13px] text-ink">{r.label}</div>
@@ -471,28 +473,28 @@ function GamelogTab({ personId, mode }: { personId: number; mode: StatMode }) {
         </div>
       )}
       {rows.length > 0 && (
-        <div className="bg-surface border border-line rounded-[14px] overflow-hidden">
+        <div className="bg-surface border border-line rounded-[14px] relative">
           {mode === "pitching" ? (
             <>
               <div
-                className="grid items-center px-3.5 md:px-4 py-3 font-ui text-[10px] font-bold tracking-[1.2px] uppercase text-ink-3 border-b border-line-2"
+                className="grid items-center px-3.5 md:px-4 py-3 font-ui text-[10px] font-bold tracking-[1.2px] uppercase text-ink-3 border-b border-line-2
+                md:relative sticky top-0 bg-surface z-5000"
                 style={{ gridTemplateColumns: pitcherCols }}
               >
-                <div>Date</div>
-                <div>Opp</div>
-                <div>IP</div>
-                <div className="text-right">H</div>
-                <div className="text-right">ER</div>
-                <div className="text-right">K</div>
-                <div className="text-right">BB</div>
+                <div className="bg-surface">Date</div>
+                <div className="bg-surface">Opp</div>
+                <div className="bg-surface">IP</div>
+                <div className="text-right bg-surface">H</div>
+                <div className="text-right bg-surface">ER</div>
+                <div className="text-right bg-surface">K</div>
+                <div className="text-right bg-surface">BB</div>
               </div>
               {rows.map((g, i) => (
                 <div
                   key={g.date}
                   data-cy="gamelog-row"
-                  className={`grid items-center px-3.5 md:px-4 py-3 ${
-                    i === rows.length - 1 ? "" : "border-b border-line-2"
-                  }`}
+                  className={`grid items-center px-3.5 md:px-4 py-3 ${i === rows.length - 1 ? "" : "border-b border-line-2"
+                    }`}
                   style={{ gridTemplateColumns: pitcherCols }}
                 >
                   <div className="font-mono text-[12px] text-ink">{fmtDate(g.date)}</div>
@@ -508,23 +510,23 @@ function GamelogTab({ personId, mode }: { personId: number; mode: StatMode }) {
           ) : (
             <>
               <div
-                className="grid items-center px-3.5 md:px-4 py-3 font-ui text-[10px] font-bold tracking-[1.2px] uppercase text-ink-3 border-b border-line-2"
+                className="grid items-center px-3.5 md:px-4 py-3 font-ui text-[10px] font-bold tracking-[1.2px] uppercase text-ink-3 border-b border-line-2
+                md:relative sticky top-0 bg-surface z-5000"
                 style={{ gridTemplateColumns: hitterCols }}
               >
-                <div>Date</div>
-                <div>Opp</div>
-                <div>H/AB</div>
-                <div className="text-right">H</div>
-                <div className="text-right">HR</div>
-                <div className="text-right">RBI</div>
+                <div className="bg-surface">Date</div>
+                <div className="bg-surface">Opp</div>
+                <div className="bg-surface">H/AB</div>
+                <div className="text-right bg-surface">H</div>
+                <div className="text-right bg-surface">HR</div>
+                <div className="text-right bg-surface">RBI</div>
               </div>
               {rows.map((g, i) => (
                 <div
                   key={g.date}
                   data-cy="gamelog-row"
-                  className={`grid items-center px-3.5 md:px-4 py-3 ${
-                    i === rows.length - 1 ? "" : "border-b border-line-2"
-                  }`}
+                  className={`grid items-center px-3.5 md:px-4 py-3 ${i === rows.length - 1 ? "" : "border-b border-line-2"
+                    }`}
                   style={{ gridTemplateColumns: hitterCols }}
                 >
                   <div className="font-mono text-[12px] text-ink">{fmtDate(g.date)}</div>
@@ -560,19 +562,24 @@ function HistoryTab({ personId, mode }: { personId: number; mode: StatMode }) {
   // Headline career tiles
   const tiles = mode === "pitching"
     ? [
-        { label: "W",    value: career.w },
-        { label: "ERA",  value: career.era },
-        { label: "K",    value: career.k },
-        { label: "WHIP", value: career.whip },
-      ]
+      { label: "W", value: career.w },
+      { label: "ERA", value: career.era },
+      { label: "K", value: career.k },
+      { label: "WHIP", value: career.whip },
+    ]
     : [
-        { label: "HR",   value: career.hr },
-        { label: "RBI",  value: career.rbi },
-        { label: "AVG",  value: career.avg },
-        { label: "OPS",  value: career.ops },
-      ];
+      { label: "HR", value: career.hr },
+      { label: "RBI", value: career.rbi },
+      { label: "AVG", value: career.avg },
+      { label: "OPS", value: career.ops },
+    ];
 
-  const tableCols = "48px 40px 1fr 1fr 1fr 1fr 1fr 1fr";
+  // Hitter layout: all six stat columns share evenly. Pitcher layout: W is
+  // a single-digit value most of the time, so we fix it at 40px (matching the
+  // Tm column) — that frees the remaining five 1fr columns to widen, giving
+  // ERA, IP, K, and WHIP enough room to not visually collide with neighbors.
+  const hitterCols = "48px 40px 1fr 1fr 1fr 1fr 1fr 1fr";
+  const pitcherCols = "48px 25px 25px 25px 1fr 1fr 1fr 1fr";
 
   return (
     <div className="px-3.5 md:px-6 pt-3.5 pb-20 flex flex-col gap-3.5">
@@ -592,28 +599,29 @@ function HistoryTab({ personId, mode }: { personId: number; mode: StatMode }) {
 
       {/* Year-by-year + career totals row */}
       {years.length > 0 && (
-        <div className="bg-surface border border-line rounded-[14px] overflow-hidden">
+        <div className="bg-surface border border-line rounded-[14px] relative">
           {mode === "pitching" ? (
             <>
               <div
-                className="grid items-center px-3.5 md:px-4 py-2.5 font-ui text-[10px] font-bold tracking-[1.2px] uppercase text-ink-3 border-b border-line-2"
-                style={{ gridTemplateColumns: tableCols }}
+                className="grid items-center px-3.5 md:px-4 py-2.5 font-ui text-[10px] font-bold tracking-[1.2px] uppercase text-ink-3 border-b border-line-2 gap-2
+                md:relative sticky top-0 bg-surface z-5000"
+                style={{ gridTemplateColumns: pitcherCols }}
               >
-                <div>Year</div>
-                <div>Tm</div>
-                <div className="text-right">W</div>
-                <div className="text-right">L</div>
-                <div className="text-right">ERA</div>
-                <div className="text-right">IP</div>
-                <div className="text-right">K</div>
-                <div className="text-right">WHIP</div>
+                <div className="bg-surface">Year</div>
+                <div className="bg-surface">Tm</div>
+                <div className="text-right bg-surface">W</div>
+                <div className="text-right bg-surface">L</div>
+                <div className="text-right bg-surface">ERA</div>
+                <div className="text-right bg-surface">IP</div>
+                <div className="text-right bg-surface">K</div>
+                <div className="text-right bg-surface">WHIP</div>
               </div>
               {years.map((y) => (
                 <div
                   key={`${y.year}-${y.team}`}
                   data-cy="history-year"
-                  className="grid items-center px-3.5 md:px-4 py-2.5 border-b border-line-2"
-                  style={{ gridTemplateColumns: tableCols }}
+                  className="grid items-center px-3.5 md:px-4 py-2.5 border-b border-line-2 gap-2"
+                  style={{ gridTemplateColumns: pitcherCols }}
                 >
                   <div className="font-mono text-[13px] text-ink">{y.year}</div>
                   <div>{y.team ? <TeamBadge abbr={y.team} size={22} /> : <span className="text-ink-3 text-xs">—</span>}</div>
@@ -626,8 +634,8 @@ function HistoryTab({ personId, mode }: { personId: number; mode: StatMode }) {
                 </div>
               ))}
               <div
-                className="grid items-center px-3.5 md:px-4 py-3 bg-chip"
-                style={{ gridTemplateColumns: tableCols }}
+                className="grid items-center px-3.5 md:px-4 py-3 bg-chip gap-2 rounded-b-[14px]"
+                style={{ gridTemplateColumns: pitcherCols }}
               >
                 <div className="font-ui text-[11px] font-bold tracking-[1px] uppercase text-ink">Career</div>
                 <div />
@@ -642,24 +650,25 @@ function HistoryTab({ personId, mode }: { personId: number; mode: StatMode }) {
           ) : (
             <>
               <div
-                className="grid items-center px-3.5 md:px-4 py-2.5 font-ui text-[10px] font-bold tracking-[1.2px] uppercase text-ink-3 border-b border-line-2"
-                style={{ gridTemplateColumns: tableCols }}
+                className="grid items-center px-3.5 md:px-4 py-2.5 font-ui text-[10px] font-bold tracking-[1.2px] uppercase text-ink-3 border-b border-line-2
+                md:relative sticky top-0 bg-surface z-5000"
+                style={{ gridTemplateColumns: hitterCols }}
               >
-                <div>Year</div>
-                <div>Tm</div>
-                <div className="text-right">G</div>
-                <div className="text-right">AB</div>
-                <div className="text-right">HR</div>
-                <div className="text-right">RBI</div>
-                <div className="text-right">AVG</div>
-                <div className="text-right">OPS</div>
+                <div className="bg-surface">Year</div>
+                <div className="bg-surface">Tm</div>
+                <div className="text-right bg-surface">G</div>
+                <div className="text-right bg-surface">AB</div>
+                <div className="text-right bg-surface">HR</div>
+                <div className="text-right bg-surface">RBI</div>
+                <div className="text-right bg-surface">AVG</div>
+                <div className="text-right bg-surface">OPS</div>
               </div>
               {years.map((y) => (
                 <div
                   key={`${y.year}-${y.team}`}
                   data-cy="history-year"
                   className="grid items-center px-3.5 md:px-4 py-2.5 border-b border-line-2"
-                  style={{ gridTemplateColumns: tableCols }}
+                  style={{ gridTemplateColumns: hitterCols }}
                 >
                   <div className="font-mono text-[13px] text-ink">{y.year}</div>
                   <div>{y.team ? <TeamBadge abbr={y.team} size={22} /> : <span className="text-ink-3 text-xs">—</span>}</div>
@@ -672,8 +681,8 @@ function HistoryTab({ personId, mode }: { personId: number; mode: StatMode }) {
                 </div>
               ))}
               <div
-                className="grid items-center px-3.5 md:px-4 py-3 bg-chip"
-                style={{ gridTemplateColumns: tableCols }}
+                className="grid items-center px-3.5 md:px-4 py-3 bg-chip rounded-b-[14px]"
+                style={{ gridTemplateColumns: hitterCols }}
               >
                 <div className="font-ui text-[11px] font-bold tracking-[1px] uppercase text-ink">Career</div>
                 <div />
@@ -698,9 +707,8 @@ function HistoryTab({ personId, mode }: { personId: number; mode: StatMode }) {
           {highlights.map((h, i) => (
             <div
               key={h.name}
-              className={`flex items-center gap-3 px-3.5 md:px-4 py-3 ${
-                i === highlights.length - 1 ? "" : "border-b border-line-2"
-              }`}
+              className={`flex items-center gap-3 px-3.5 md:px-4 py-3 ${i === highlights.length - 1 ? "" : "border-b border-line-2"
+                }`}
             >
               <div className="w-11 h-11 rounded-full bg-chip flex items-center justify-center font-mono text-[13px] font-bold text-accent shrink-0">
                 {h.count}×

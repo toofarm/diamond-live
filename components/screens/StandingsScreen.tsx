@@ -5,6 +5,7 @@ import { useApi } from "@/lib/mlb/client";
 import type { StandingsByDivision } from "@/lib/mlb/types";
 import { TEAMS } from "@/lib/mlb/teams";
 import { AppBar, Loader, TeamBadge } from "@/components/ui/primitives";
+import { useTitle } from "@/lib/title";
 
 interface Resp {
   season: number;
@@ -12,6 +13,7 @@ interface Resp {
 }
 
 export function StandingsScreen({ onTeam }: { onTeam: (abbr: string) => void }) {
+  useTitle("Standings");
   const { data, loading, error } = useApi<Resp>("/api/mlb/standings", { cacheMs: 300_000 });
   const [league, setLeague] = useState<"AL" | "NL">("AL");
 

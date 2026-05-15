@@ -5,7 +5,14 @@ import { useEffect, useRef, useState } from "react";
 export interface UseApiState<T> {
   data: T | null;
   error: string | null;
+  /** True only when the FIRST fetch for this URL hasn't completed yet —
+   *  used for "show a spinner while we have no data to render." Stays false
+   *  during background polls and refreshes once we have data in hand. */
   loading: boolean;
+  /** True whenever a fetch is currently in flight — including the initial
+   *  load, polls, and manual `refresh()` calls. Use this for "disable the
+   *  manual-refresh button" and similar in-flight-aware UI. */
+  fetching: boolean;
   refresh: () => void;
 }
 
@@ -71,6 +78,7 @@ export function useApi<T>(url: string | null, opts: UseApiOptions = {}): UseApiS
   }
 
   const [tick, setTick] = useState(0);
+  const [fetching, setFetching] = useState(false);
   const aborter = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -83,6 +91,7 @@ export function useApi<T>(url: string | null, opts: UseApiOptions = {}): UseApiS
     aborter.current?.abort();
     const ac = new AbortController();
     aborter.current = ac;
+    setFetching(true);
 
     fetch(url, { signal: ac.signal })
       .then(async (res): Promise<S<T>> => {
@@ -96,7 +105,9 @@ export function useApi<T>(url: string | null, opts: UseApiOptions = {}): UseApiS
         return { data: null, error: e.message, loading: false };
       })
       .then((next) => {
-        if (next && !ac.signal.aborted) setState(next);
+        if (ac.signal.aborted) return;
+        if (next) setState(next);
+        setFetching(false);
       });
 
     return () => ac.abort();
@@ -113,5 +124,5 @@ export function useApi<T>(url: string | null, opts: UseApiOptions = {}): UseApiS
     setTick((t) => t + 1);
   };
 
-  return { ...state, refresh };
+  return { ...state, refresh, fetching };
 }

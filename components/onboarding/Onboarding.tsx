@@ -8,9 +8,24 @@ import { DEFAULT_NOTIFICATIONS, DEFAULT_PREFS, type UserProfile } from "@/lib/st
 
 interface Props {
   onDone: (profile: UserProfile) => void;
-  /** If provided, jumps directly to step 2 in "manage" mode (Settings → re-pick teams). */
+  /** Pre-populated starting values for name / follows / notifications / prefs.
+   *  Used by:
+   *   - Settings "manage teams" (passes the current user profile)
+   *   - The guest → authenticated upgrade flow (passes the merged profile
+   *     from `mergeProfileForUpgrade`)
+   *  Providing `initial` no longer implies manage-mode — pair with the
+   *  `manageMode` prop when you want to skip to step 2. */
   initial?: UserProfile;
+  /** When true, jumps directly to step 2 (team picker) and switches the
+   *  CTA copy to "Cancel" / "Confirm selections" — used by the Settings
+   *  → "Manage teams" entry point. Defaults to false. */
+  manageMode?: boolean;
   onCancel?: () => void;
+  /** When provided, the flow opens with a splash that lets the user pick
+   *  between creating a profile (fires `onSignUp` — typically a navigation
+   *  to /login) and continuing as a guest (proceeds to the name + teams
+   *  flow). Omit to skip the splash and start at step 1 directly. */
+  onSignUp?: () => void;
 }
 
 const overlayClass =
@@ -27,9 +42,9 @@ const secondaryBtnClass =
   "px-4 py-[14px] bg-chip text-ink border border-line rounded-[14px] cursor-pointer font-head text-[15px] font-semibold tracking-[-0.2px] " +
   "basis-[36%] shrink-0 grow-0";
 
-export function Onboarding({ onDone, initial, onCancel }: Props) {
-  const manageMode = !!initial;
-  const [step, setStep] = useState<1 | 2>(manageMode ? 2 : 1);
+export function Onboarding({ onDone, initial, manageMode = false, onCancel, onSignUp }: Props) {
+  const showSplash = !manageMode && !!onSignUp;
+  const [step, setStep] = useState<0 | 1 | 2>(manageMode ? 2 : showSplash ? 0 : 1);
   const [name, setName] = useState(initial?.name ?? "");
   const [selected, setSelected] = useState<string[]>(initial?.follows ?? []);
   const [query, setQuery] = useState("");
@@ -50,6 +65,41 @@ export function Onboarding({ onDone, initial, onCancel }: Props) {
     nl.sort((a, b) => a.city.localeCompare(b.city));
     return { al, nl };
   }, [query]);
+
+  /* ── Step 0: splash — sign up vs continue as guest ─────────── */
+  if (step === 0 && onSignUp) {
+    return (
+      <div data-cy="onboarding-splash" className={overlayClass}>
+        <div className="shrink-0 pt-[calc(env(safe-area-inset-top,0)+40px)] px-6 pb-2">
+          <Wordmark />
+          <h1 className="mt-7 font-head text-[32px] font-bold tracking-[-1.2px] leading-[1.05] text-ink">
+            Welcome to<br />Game State.
+          </h1>
+          <p className="mt-2.5 text-sm text-ink-2 leading-normal max-w-[320px]">
+            Create a profile to sync your follows and preferences across devices, or continue as a guest to keep everything on this device.
+          </p>
+        </div>
+        <div className="flex-1" />
+        <div className={ctaWrapClass}>
+          <button
+            data-cy="splash-signup"
+            onClick={onSignUp}
+            className={`${ctaBaseClass} w-full bg-accent text-white cursor-pointer mb-2.5`}
+          >
+            Create a profile
+          </button>
+          <button
+            data-cy="splash-guest"
+            onClick={() => setStep(1)}
+            className={`${ctaBaseClass} w-full bg-chip text-ink border border-line cursor-pointer`}
+          >
+            Continue as guest
+          </button>
+          <SignInFallback onSignIn={onSignUp} />
+        </div>
+      </div>
+    );
+  }
 
   /* ── Step 1: name ─────────────────────────────────────────── */
   if (step === 1) {
@@ -88,6 +138,7 @@ export function Onboarding({ onDone, initial, onCancel }: Props) {
           >
             Continue
           </button>
+          <SignInFallback onSignIn={onSignUp} />
         </div>
       </div>
     );
@@ -171,6 +222,7 @@ export function Onboarding({ onDone, initial, onCancel }: Props) {
                 follows: [],
                 notifications: DEFAULT_NOTIFICATIONS,
                 prefs: DEFAULT_PREFS,
+                onboarded: true,
               })}
               className="bg-transparent border-none cursor-pointer text-ink-3 text-xs font-ui p-0"
             >
@@ -194,6 +246,7 @@ export function Onboarding({ onDone, initial, onCancel }: Props) {
               follows: selected,
               notifications: initial?.notifications ?? DEFAULT_NOTIFICATIONS,
               prefs: initial?.prefs ?? DEFAULT_PREFS,
+              onboarded: true,
             })}
             disabled={!manageMode && selected.length === 0}
             className={`${ctaBaseClass} ${
@@ -205,7 +258,38 @@ export function Onboarding({ onDone, initial, onCancel }: Props) {
             {manageMode ? "Confirm selections" : "Continue to scores"}
           </button>
         </div>
+        <SignInFallback onSignIn={onSignUp} />
       </div>
     </div>
+  );
+}
+
+/**
+ * Subtle "already have a profile? Sign in" link rendered below the primary
+ * onboarding CTAs. Gated on `onSignIn` being defined so it only appears for
+ * truly anonymous users — manageMode (re-pick teams from Settings) and the
+ * authenticated-not-onboarded path both pass undefined and get nothing.
+ *
+ * Intentionally a text link rather than a button — the primary action on
+ * each step is "continue with the current flow"; this is a fail-safe for
+ * someone who reached onboarding erroneously.
+ */
+function SignInFallback({ onSignIn }: { onSignIn: (() => void) | undefined }) {
+  if (!onSignIn) return null;
+  return (
+    <p
+      data-cy="onboarding-signin-fallback"
+      className="mt-3 text-center text-[12px] text-ink-3 font-ui"
+    >
+      Already have a profile?{" "}
+      <button
+        type="button"
+        data-cy="onboarding-signin-link"
+        onClick={onSignIn}
+        className="bg-transparent border-none p-0 cursor-pointer text-accent font-semibold"
+      >
+        Sign in
+      </button>
+    </p>
   );
 }
