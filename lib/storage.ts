@@ -60,6 +60,58 @@ export const DEFAULT_PREFS: DisplayPrefs = {
 /** localStorage key used by the pre-hydration boot script in app/layout.tsx. */
 export const STORAGE_KEY = "dl_user";
 
+/** Standalone localStorage cache for the authenticated user's theme, so the
+ *  pre-hydration boot script can paint twilight before Supabase has had time
+ *  to return a profile. Guest themes don't need this — they're already
+ *  present in `dl_user`, which the boot script reads. The DB value remains
+ *  authoritative: when the Supabase profile resolves, the layout's theme
+ *  effect overwrites the DOM attribute and this cache is rewritten to match. */
+export const THEME_STORAGE_KEY = "dl_theme";
+
+/** Cypress-only sentinel: when present alongside `dl_user`, the E2E_MODE
+ *  branches of the auth store boot as `authenticated` (with the dl_user
+ *  payload reused as the profile body). Lets specs exercise authenticated
+ *  surfaces — Settings sign-out, account card — without needing a real
+ *  Supabase session. Never written or read outside Cypress fixtures. */
+export const E2E_AUTH_SENTINEL_KEY = "dl_e2e_authenticated";
+
+function readE2EAuthSnapshot(): AuthSnapshot {
+  if (typeof window === "undefined") return { status: "anonymous" };
+  try {
+    if (!window.localStorage.getItem(E2E_AUTH_SENTINEL_KEY)) {
+      return { status: "anonymous" };
+    }
+    const profile = readFromStorage();
+    if (!profile) return { status: "anonymous" };
+    return {
+      status: "authenticated",
+      profile,
+      userId: "e2e-user",
+      email: "e2e@cypress.test",
+    };
+  } catch {
+    return { status: "anonymous" };
+  }
+}
+
+function cacheThemePref(theme: "light" | "twilight"): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch {
+    /* localStorage may be disabled — silently ignore */
+  }
+}
+
+function clearThemeCache(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(THEME_STORAGE_KEY);
+  } catch {
+    /* localStorage may be disabled — silently ignore */
+  }
+}
+
 function readFromStorage(): UserProfile | null {
   if (typeof window === "undefined") return null;
   try {
@@ -245,11 +297,11 @@ function initAuthStore(): void {
   if (authInitialized || typeof window === "undefined") return;
   authInitialized = true;
 
-  // Test runs never touch Supabase — resolve immediately to `anonymous` so
-  // Cypress specs that don't seed an authenticated session render the app
-  // shell without firing a JWKS fetch or session probe.
+  // Test runs never touch Supabase — resolve from the E2E sentinel (or
+  // `anonymous` when absent) so Cypress specs render the shell without
+  // firing a JWKS fetch or session probe.
   if (E2E_MODE) {
-    authSnapshot = { status: "anonymous" };
+    authSnapshot = readE2EAuthSnapshot();
     notifyAuth();
     return;
   }
@@ -260,17 +312,22 @@ function initAuthStore(): void {
     try {
       const profile = await fetchAuthenticatedProfile(supabase, userId);
       authSnapshot = { status: "authenticated", profile, userId, email };
+      cacheThemePref(profile.prefs.theme);
     } catch {
       // Auth resolved but the profile fetch failed (network blip, etc.).
       // Fall back to anonymous so the app remains usable rather than stuck
       // in a half-authenticated state.
       authSnapshot = { status: "anonymous" };
+      clearThemeCache();
     }
     notifyAuth();
   };
 
   const applyAnonymous = () => {
     authSnapshot = { status: "anonymous" };
+    // Drop the theme cache so a new visitor on this device doesn't inherit
+    // the previous user's theme on the next pre-hydration paint.
+    clearThemeCache();
     notifyAuth();
   };
 
@@ -340,7 +397,7 @@ function getServerAuthSnapshot(): AuthSnapshot {
 export async function refreshAuthSnapshot(): Promise<void> {
   if (typeof window === "undefined") return;
   if (E2E_MODE) {
-    authSnapshot = { status: "anonymous" };
+    authSnapshot = readE2EAuthSnapshot();
     notifyAuth();
     return;
   }
@@ -353,11 +410,14 @@ export async function refreshAuthSnapshot(): Promise<void> {
     try {
       const profile = await fetchAuthenticatedProfile(supabase, userId);
       authSnapshot = { status: "authenticated", profile, userId, email };
+      cacheThemePref(profile.prefs.theme);
     } catch {
       authSnapshot = { status: "anonymous" };
+      clearThemeCache();
     }
   } else {
     authSnapshot = { status: "anonymous" };
+    clearThemeCache();
   }
   notifyAuth();
 }

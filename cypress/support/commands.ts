@@ -26,6 +26,29 @@ Cypress.Commands.add("visitAsUser", (path: string, fixtureName: string = "user")
       onBeforeLoad(win) {
         win.localStorage.setItem("dl_user", JSON.stringify(profile));
         win.localStorage.setItem("dl_guest_nudge_until", String(NUDGE_SUPPRESS_UNTIL));
+        // Defensive: a prior test in the same spec file may have set the
+        // auth sentinel via visitAsAuthenticatedUser. Clear it so this
+        // visit boots as a guest, not an authenticated user.
+        win.localStorage.removeItem("dl_e2e_authenticated");
+      },
+    });
+  });
+});
+
+/**
+ * Visit a path with the seeded user AND an "authenticated session"
+ * sentinel. Under E2E_MODE the auth store reads this sentinel and boots
+ * with `status: "authenticated"`, surfacing the account/sign-out UI in
+ * Settings that the guest path hides. Use this for specs that exercise
+ * the post-sign-in surface.
+ */
+Cypress.Commands.add("visitAsAuthenticatedUser", (path: string, fixtureName: string = "user") => {
+  cy.fixture(fixtureName).then((profile) => {
+    cy.visit(path, {
+      onBeforeLoad(win) {
+        win.localStorage.setItem("dl_user", JSON.stringify(profile));
+        win.localStorage.setItem("dl_guest_nudge_until", String(NUDGE_SUPPRESS_UNTIL));
+        win.localStorage.setItem("dl_e2e_authenticated", "1");
       },
     });
   });
@@ -45,6 +68,7 @@ Cypress.Commands.add("visitAsAnonymous", (path: string) => {
     onBeforeLoad(win) {
       win.localStorage.removeItem("dl_user");
       win.localStorage.removeItem("dl_guest_nudge_until");
+      win.localStorage.removeItem("dl_e2e_authenticated");
     },
   });
 });
@@ -64,6 +88,7 @@ declare global {
   namespace Cypress {
     interface Chainable {
       visitAsUser(path: string, fixtureName?: string): Chainable<void>;
+      visitAsAuthenticatedUser(path: string, fixtureName?: string): Chainable<void>;
       visitAsAnonymous(path: string): Chainable<void>;
       mockScoreboard(fixtureName?: string): Chainable<void>;
     }

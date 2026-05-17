@@ -15,33 +15,37 @@ interface CatMeta {
 }
 
 const CATS: CatMeta[] = [
-  { id: "AVG",  label: "Batting Avg",         sub: "AVG",  blurb: "Hits per at-bat",                       group: "hitting"  },
-  { id: "HR",   label: "Home Runs",           sub: "HR",   blurb: "Balls hit out of the park",             group: "hitting"  },
-  { id: "RBI",  label: "Runs Batted In",      sub: "RBI",  blurb: "Runs driven in by the batter",          group: "hitting"  },
-  { id: "OPS",  label: "On-base + Slugging",  sub: "OPS",  blurb: "OBP combined with slugging",            group: "hitting"  },
-  { id: "OBP",  label: "On-base Pct",         sub: "OBP",  blurb: "How often a batter reaches base",       group: "hitting"  },
-  { id: "SLG",  label: "Slugging Pct",        sub: "SLG",  blurb: "Total bases per at-bat",                group: "hitting"  },
-  { id: "H",    label: "Hits",                sub: "H",    blurb: "Total hits",                            group: "hitting"  },
-  { id: "R",    label: "Runs",                sub: "R",    blurb: "Runs scored",                           group: "hitting"  },
-  { id: "ERA",  label: "Earned Run Avg",      sub: "ERA",  blurb: "Earned runs allowed per 9 innings",     group: "pitching" },
-  { id: "K",    label: "Strikeouts",          sub: "K",    blurb: "Batters retired on three strikes",      group: "pitching" },
-  { id: "WHIP", label: "WHIP",                sub: "WHIP", blurb: "Walks + hits per inning pitched",       group: "pitching" },
-  { id: "W",    label: "Wins",                sub: "W",    blurb: "Pitching wins",                         group: "pitching" },
-  { id: "SV",   label: "Saves",               sub: "SV",   blurb: "Closer saves",                          group: "pitching" },
-  { id: "FPCT", label: "Fielding Pct",        sub: "FPCT", blurb: "Successful fielding per chance",        group: "fielding" },
-  { id: "PO",   label: "Putouts",             sub: "PO",   blurb: "Outs credited to a fielder",            group: "fielding" },
-  { id: "A",    label: "Assists",             sub: "A",    blurb: "Throws on outs made by another",        group: "fielding" },
-  { id: "E",    label: "Errors",              sub: "E",    blurb: "Misplays charged to a fielder",         group: "fielding" },
+  { id: "AVG", label: "Batting Avg", sub: "AVG", blurb: "Hits per at-bat", group: "hitting" },
+  { id: "HR", label: "Home Runs", sub: "HR", blurb: "Balls hit out of the park", group: "hitting" },
+  { id: "RBI", label: "Runs Batted In", sub: "RBI", blurb: "Runs driven in by the batter", group: "hitting" },
+  { id: "OPS", label: "On-base + Slugging", sub: "OPS", blurb: "OBP combined with slugging", group: "hitting" },
+  { id: "OBP", label: "On-base Pct", sub: "OBP", blurb: "How often a batter reaches base", group: "hitting" },
+  { id: "SLG", label: "Slugging Pct", sub: "SLG", blurb: "Total bases per at-bat", group: "hitting" },
+  { id: "H", label: "Hits", sub: "H", blurb: "Total hits", group: "hitting" },
+  { id: "R", label: "Runs", sub: "R", blurb: "Runs scored", group: "hitting" },
+  { id: "ERA", label: "Earned Run Avg", sub: "ERA", blurb: "Earned runs allowed per 9 innings", group: "pitching" },
+  { id: "K", label: "Strikeouts", sub: "K", blurb: "Batters retired on three strikes", group: "pitching" },
+  { id: "K9", label: "Strikeouts / 9", sub: "K/9", blurb: "Strikeouts per nine innings", group: "pitching" },
+  { id: "KBB", label: "K / BB Ratio", sub: "K/BB", blurb: "Strikeouts per walk", group: "pitching" },
+  { id: "WHIP", label: "WHIP", sub: "WHIP", blurb: "Walks + hits per inning pitched", group: "pitching" },
+  { id: "IP", label: "Innings Pitched", sub: "IP", blurb: "Total innings pitched", group: "pitching" },
+  { id: "CG", label: "Complete Games", sub: "CG", blurb: "Starts pitched to completion", group: "pitching" },
+  { id: "W", label: "Wins", sub: "W", blurb: "Pitching wins", group: "pitching" },
+  { id: "SV", label: "Saves", sub: "SV", blurb: "Closer saves", group: "pitching" },
+  { id: "FPCT", label: "Fielding Pct", sub: "FPCT", blurb: "Successful fielding per chance", group: "fielding" },
+  { id: "PO", label: "Putouts", sub: "PO", blurb: "Outs credited to a fielder", group: "fielding" },
+  { id: "A", label: "Assists", sub: "A", blurb: "Throws on outs made by another", group: "fielding" },
+  { id: "E", label: "Errors", sub: "E", blurb: "Misplays charged to a fielder", group: "fielding" },
 ];
 
 const GROUPS: { id: LeaderGroup; label: string }[] = [
-  { id: "hitting",  label: "Batting" },
+  { id: "hitting", label: "Batting" },
   { id: "pitching", label: "Pitching" },
   { id: "fielding", label: "Fielding" },
 ];
 
 const DEFAULT_CAT: Record<LeaderGroup, LeaderCategory> = {
-  hitting:  "AVG",
+  hitting: "AVG",
   pitching: "ERA",
   fielding: "FPCT",
 };
@@ -74,7 +78,7 @@ export function LeadersScreen({ onPlayer }: { onPlayer: (id: number) => void }) 
   return (
     <>
       <AppBar title="Leaders" />
-      <div data-cy="leaders-screen" className="bg-canvas px-[14px] md:px-6 pt-3 pb-[100px] max-w-[900px] w-full mx-auto">
+      <div data-cy="leaders-screen" className="bg-canvas px-3.5 md:px-6 pt-3 pb-25 max-w-[900px] w-full mx-auto">
         {/* Group toggle — pill segmented control on a tan track */}
         <div
           className="relative inline-flex w-full p-1 rounded-full"
@@ -92,9 +96,8 @@ export function LeadersScreen({ onPlayer }: { onPlayer: (id: number) => void }) 
                 data-cy="group-tab"
                 data-cy-group={g.id}
                 onClick={() => selectGroup(g.id)}
-                className={`flex-1 py-2.5 rounded-full border-none cursor-pointer font-head text-[15px] font-semibold tracking-[-0.2px] transition-colors ${
-                  on ? "bg-accent text-white" : "bg-transparent text-ink-2"
-                }`}
+                className={`flex-1 py-2.5 rounded-full border-none cursor-pointer font-head text-[15px] font-semibold tracking-[-0.2px] transition-colors ${on ? "bg-accent text-white" : "bg-transparent text-ink-2"
+                  }`}
               >
                 {g.label}
               </button>
@@ -112,11 +115,10 @@ export function LeadersScreen({ onPlayer }: { onPlayer: (id: number) => void }) 
                 data-cy="metric-pill"
                 data-cy-metric={c.id}
                 onClick={() => setCatId(c.id)}
-                className={`shrink-0 min-w-[64px] px-4 py-2 rounded-full cursor-pointer font-mono text-[14px] font-bold tracking-[0.3px] transition-colors ${
-                  on
+                className={`shrink-0 min-w-[64px] px-4 py-2 rounded-full cursor-pointer font-mono text-[14px] font-bold tracking-[0.3px] transition-colors ${on
                     ? "bg-ink text-surface border border-ink"
                     : "bg-transparent text-ink border border-line"
-                }`}
+                  }`}
               >
                 {c.sub}
               </button>
@@ -209,9 +211,8 @@ function LeaderList({
                   data-cy="leader-row"
                   data-cy-player-id={r.personId}
                   onClick={() => onPlayer(r.personId)}
-                  className={`w-full grid items-center gap-3 px-3 md:px-4 py-3 border-t border-line-2 bg-transparent border-l-0 border-r-0 border-b-0 cursor-pointer text-left transition-colors ${
-                    leader ? "" : "hover:bg-canvas"
-                  }`}
+                  className={`w-full grid items-center gap-3 px-3 md:px-4 py-3 border-t border-line-2 bg-transparent border-l-0 border-r-0 border-b-0 cursor-pointer text-left transition-colors ${leader ? "" : "hover:bg-canvas"
+                    }`}
                   style={{
                     gridTemplateColumns: gridCols,
                     background: leader
@@ -221,9 +222,8 @@ function LeaderList({
                   aria-label={`${cat.label} rank ${i + 1}: ${r.fullName}, ${r.value}`}
                 >
                   <span
-                    className={`shrink-0 w-7 h-7 rounded-[8px] inline-flex items-center justify-center font-mono text-[13px] font-bold ${
-                      leader ? "bg-accent text-white" : "bg-chip text-ink"
-                    }`}
+                    className={`shrink-0 w-7 h-7 rounded-lg inline-flex items-center justify-center font-mono text-[13px] font-bold ${leader ? "bg-accent text-white" : "bg-chip text-ink"
+                      }`}
                   >
                     {i + 1}
                   </span>

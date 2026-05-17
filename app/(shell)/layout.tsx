@@ -10,6 +10,7 @@ import {
   clearUser,
   readGuestProfile,
   mergeProfileForUpgrade,
+  refreshAuthSnapshot,
   DEFAULT_NOTIFICATIONS,
   type UserProfile,
 } from "@/lib/storage";
@@ -62,9 +63,25 @@ export default function ShellLayout({ children }: { children: React.ReactNode })
   // snapshot, so `user` reads as null on SSR and the first client render even
   // when a profile exists in localStorage. Wait one effect tick before letting
   // the onboarding overlay open so returning users don't see it flash on mount.
+  //
+  // We also re-probe the browser auth store on every shell mount. The
+  // supabase-js `onAuthStateChange` listener only fires for events the
+  // browser client itself originated — our sign-in / sign-out / sign-up
+  // flows go through server actions that mutate cookies via the server
+  // client, leaving the in-memory snapshot stale in three directions:
+  //   - anonymous → authenticated (just signed in, redirected here)
+  //   - authenticated → anonymous (signed out, came back as guest)
+  //   - authenticated → different authenticated (signed in as someone else)
+  // Re-probing on mount catches all three without needing to enumerate
+  // which one we're in. The probe is gated to `setHydrated` so the
+  // onboarding overlay never opens against a stale snapshot. On a normal
+  // returning-user page load the snapshot is "loading" until
+  // `initAuthStore`'s own probe completes; this extra probe is a small
+  // duplicate of that one, harmless and idempotent.
   const [hydrated, setHydrated] = useState(false);
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- post-mount hydration flag; React's canonical SSR-skew pattern
-  useEffect(() => setHydrated(true), []);
+  useEffect(() => {
+    refreshAuthSnapshot().finally(() => setHydrated(true));
+  }, []);
 
   // Onboarding gate: open for brand-new anonymous visitors AND for authenticated
   // users who just signed up (Supabase session exists but the profile row's

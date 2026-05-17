@@ -41,19 +41,36 @@ export const viewport: Viewport = {
 };
 
 /**
- * Pre-hydration boot script: reads the saved user profile out of localStorage
+ * Pre-hydration boot script: reads the saved user theme out of localStorage
  * and applies `data-theme="twilight"` to <html> before the page paints. Without
  * this, returning twilight users would see a flash of the light theme between
  * SSR and the first client effect.
+ *
+ * Two sources, in order of precedence:
+ *  1. `dl_theme` — a small standalone cache written whenever an authenticated
+ *     user's profile is observed (see `cacheThemePref` in lib/storage.ts).
+ *     Authenticated users don't have a `dl_user` entry to read from, since
+ *     their profile lives in Supabase, so this dedicated key is what lets us
+ *     paint their theme synchronously instead of waiting for the round-trip.
+ *  2. `dl_user` — the guest profile blob, which contains a `prefs.theme`.
+ *     Guests have no Supabase profile, so this is their only source.
+ *
+ * The DB value remains authoritative: once Supabase returns the profile, the
+ * (shell) layout's theme effect re-applies `data-theme`, and the same code
+ * path rewrites `dl_theme` for next paint.
  */
 const THEME_BOOT_SCRIPT = `
 try {
-  var raw = localStorage.getItem('dl_user');
-  if (raw) {
-    var p = JSON.parse(raw);
-    if (p && p.prefs && p.prefs.theme === 'twilight') {
-      document.documentElement.setAttribute('data-theme', 'twilight');
+  var theme = localStorage.getItem('dl_theme');
+  if (!theme) {
+    var raw = localStorage.getItem('dl_user');
+    if (raw) {
+      var p = JSON.parse(raw);
+      theme = p && p.prefs && p.prefs.theme;
     }
+  }
+  if (theme === 'twilight') {
+    document.documentElement.setAttribute('data-theme', 'twilight');
   }
 } catch (e) {}
 `;
