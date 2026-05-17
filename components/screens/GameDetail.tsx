@@ -372,7 +372,7 @@ function ScoreChip({
       data-cy="score-chip"
       data-cy-side={side}
       aria-hidden={!visible}
-      className={`flex items-center gap-2 overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 ease-out ${order} ${visible ? "max-w-[120px] opacity-100" : "max-w-0 opacity-0"
+      className={`flex items-center gap-2 overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 ease-out ${order} ${visible ? "max-w-30 opacity-100" : "max-w-0 opacity-0"
         }`}
     >
       <TeamBadge abbr={abbr} size={22} />
@@ -931,31 +931,65 @@ function BoxSection({
 /* ── Plays tab ────────────────────────────────────────────────── */
 
 function PlaysTab({ plays }: { plays: Play[] }) {
+  const [scoringOnly, setScoringOnly] = useState(false);
   if (plays.length === 0) {
     return <div className="p-6 text-ink-3 text-center">No plays yet.</div>;
   }
+  const visible = scoringOnly ? plays.filter((p) => p.score) : plays;
   return (
-    <div className="bg-surface border border-line rounded-[14px] overflow-hidden">
-      {plays.map((p, i) => (
-        <div
-          key={i}
-          className={`grid items-center gap-2 px-3.5 py-3 ${i === plays.length - 1 ? "" : "border-b border-line-2"}`}
-          style={{ gridTemplateColumns: "60px 40px 1fr 60px" }}
-        >
-          <span className="font-mono text-[10px] text-ink-3 tracking-[0.5px]">{p.half}</span>
-          {p.tag ? (
-            <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded-sm bg-accent text-white w-fit">
-              {p.tag}
-            </span>
-          ) : (
-            <span />
-          )}
-          <div className="text-[13px] text-ink leading-snug">{p.desc}</div>
-          {p.score && (
-            <span className="font-mono text-xs text-ink-2 text-right font-semibold">{p.score}</span>
-          )}
+    <div className="flex flex-col gap-3">
+      <div
+        data-cy="plays-filter"
+        className="flex items-center gap-1 bg-surface border border-line rounded-full p-1 self-end"
+      >
+        {([
+          ["all", "All", false],
+          ["scoring", "Scoring", true],
+        ] as const).map(([key, label, value]) => {
+          const on = scoringOnly === value;
+          return (
+            <button
+              key={key}
+              type="button"
+              data-cy="plays-filter-option"
+              data-cy-filter={key}
+              aria-pressed={on}
+              onClick={() => setScoringOnly(value)}
+              className={`px-3 py-1 rounded-full border-none cursor-pointer font-ui text-[11px] font-bold uppercase tracking-[0.8px] ${on ? "bg-accent text-white" : "bg-transparent text-ink-2"
+                }`}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      {visible.length === 0 ? (
+        <div className="p-6 text-ink-3 text-center">No scoring plays yet.</div>
+      ) : (
+        <div data-cy="plays-list" className="bg-surface border border-line rounded-[14px] overflow-hidden">
+          {visible.map((p, i) => (
+            <div
+              key={i}
+              data-cy="play-row"
+              className={`grid items-center gap-2 px-3.5 py-3 ${i === visible.length - 1 ? "" : "border-b border-line-2"}`}
+              style={{ gridTemplateColumns: "60px 40px 1fr 60px" }}
+            >
+              <span className="font-mono text-[10px] text-ink-3 tracking-[0.5px]">{p.half}</span>
+              {p.tag ? (
+                <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded-sm bg-accent text-white w-fit">
+                  {p.tag}
+                </span>
+              ) : (
+                <span />
+              )}
+              <div className="text-[13px] text-ink leading-snug">{p.desc}</div>
+              {p.score && (
+                <span className="font-mono text-xs text-ink-2 text-right font-semibold">{p.score}</span>
+              )}
+            </div>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }

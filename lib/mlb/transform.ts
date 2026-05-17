@@ -294,10 +294,17 @@ function mapPlay(p: any): Play {
       result: e?.details?.description ?? e?.details?.call?.description ?? "",
     }));
 
+  // `result.awayScore`/`result.homeScore` are present on every play (the running
+  // score after the at-bat completes), so they can't be used to detect scoring
+  // plays. MLB exposes that as a dedicated boolean on `about.isScoringPlay`;
+  // only emit `score` when that flag is set so callers can treat presence of
+  // `Play.score` as "this play scored."
+  const isScoring = !!p?.about?.isScoringPlay;
   return {
     half,
     desc: p?.result?.description ?? p?.result?.event ?? "",
     score:
+      isScoring &&
       typeof p?.result?.awayScore === "number" &&
       typeof p?.result?.homeScore === "number"
         ? `${p.result.awayScore}-${p.result.homeScore}`
@@ -562,10 +569,13 @@ export function mapGameDetail(
     summary.strikes = ls.strikes ?? 0;
   }
 
+  // Return the full game's plays (most-recent first). Display windows are the
+  // UI's concern: the Summary "Recent" card caps itself to 4, and the Plays tab
+  // can filter to scoring-only — both need access to the entire log to work
+  // correctly across a 9-inning game.
   const plays = ((live?.plays?.allPlays ?? []) as any[])
     .filter((p) => p?.result?.event) // only completed plate appearances
     .reverse() // most recent first
-    .slice(0, 20)
     .map(mapPlay);
 
   const linescore = mapLinescore(feed);
