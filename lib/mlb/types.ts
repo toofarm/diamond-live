@@ -200,7 +200,7 @@ export type LeaderGroup = "hitting" | "pitching" | "fielding";
 
 export type LeaderCategory =
   | "AVG" | "HR" | "RBI" | "OPS" | "OBP" | "SLG" | "H" | "R"
-  | "ERA" | "K" | "WHIP" | "W" | "SV"
+  | "ERA" | "K" | "WHIP" | "W" | "SV" | "K9" | "KBB" | "CG" | "IP"
   | "FPCT" | "PO" | "A" | "E";
 
 export interface RosterRow {
