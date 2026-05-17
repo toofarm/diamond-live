@@ -62,10 +62,19 @@ export async function signUpWithPassword(
 }
 
 export async function signOut(): Promise<void> {
-  if (E2E_MODE) return;
-  const supabase = await createClient();
-  await supabase.auth.signOut();
-  revalidatePath("/", "layout");
+  // Under E2E_MODE there's no real Supabase session to terminate, but the
+  // redirect itself is part of the user-facing flow Cypress needs to assert
+  // on — skip the Supabase call only, keep the redirect.
+  if (!E2E_MODE) {
+    const supabase = await createClient();
+    await supabase.auth.signOut();
+    revalidatePath("/", "layout");
+  }
+  // Same rationale as signInWithPassword: navigate on the server so the
+  // client never sees a `router.push` + `router.refresh` race that blanked
+  // the page on iOS Safari. Land on /login so the signed-out user sees the
+  // auth surface, not the splash flow. Throws NEXT_REDIRECT; never returns.
+  redirect("/login");
 }
 
 /**

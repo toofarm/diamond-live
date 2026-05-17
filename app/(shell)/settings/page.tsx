@@ -6,7 +6,6 @@ import { useShell } from "@/lib/shell";
 import {
   DEFAULT_NOTIFICATIONS,
   DEFAULT_PREFS,
-  refreshAuthSnapshot,
   useUserState,
   type DisplayPrefs,
   type NotificationPrefs,
@@ -26,15 +25,13 @@ export default function Page() {
       : { status: "guest" };
 
   const handleSignOut = async () => {
+    // The server action wipes the session cookies and issues a 303 to /login.
+    // No client-side push/refresh — those raced on iOS Safari and blanked
+    // the destination. The browser auth snapshot is left stale here on
+    // purpose: it'll be re-probed by the (shell) layout's mount effect the
+    // next time the user re-enters a shell route (sign back in, or continue
+    // as guest then a tab route).
     await signOut();
-    // The server action cleared the cookies, but as with sign-in, the
-    // client-side auth store needs to be told to re-read since its
-    // onAuthStateChange listener only fires for browser-client-initiated
-    // changes. Refresh first, then nav. Land on /login (not /scores) so
-    // a signed-out user sees the auth surface, not the splash flow.
-    await refreshAuthSnapshot();
-    router.push("/login");
-    router.refresh();
   };
 
   return (

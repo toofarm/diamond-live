@@ -64,24 +64,23 @@ export default function ShellLayout({ children }: { children: React.ReactNode })
   // when a profile exists in localStorage. Wait one effect tick before letting
   // the onboarding overlay open so returning users don't see it flash on mount.
   //
-  // When this layout is mounting because the user was just redirected here
-  // from a server-action sign-in (/login → /scores via `redirect()`), the
-  // browser auth store is still stale — the server set the auth cookies, but
-  // the browser client's `onAuthStateChange` listener only fires for events
-  // it originated, so the in-memory snapshot is whatever `initAuthStore`
-  // probed before sign-in (anonymous). We re-probe via `refreshAuthSnapshot`
-  // before flipping `hydrated` so the onboarding overlay never opens against
-  // that stale state. For all other mount paths the snapshot is already
-  // "loading" or "authenticated" and we unblock immediately.
+  // We also re-probe the browser auth store on every shell mount. The
+  // supabase-js `onAuthStateChange` listener only fires for events the
+  // browser client itself originated — our sign-in / sign-out / sign-up
+  // flows go through server actions that mutate cookies via the server
+  // client, leaving the in-memory snapshot stale in three directions:
+  //   - anonymous → authenticated (just signed in, redirected here)
+  //   - authenticated → anonymous (signed out, came back as guest)
+  //   - authenticated → different authenticated (signed in as someone else)
+  // Re-probing on mount catches all three without needing to enumerate
+  // which one we're in. The probe is gated to `setHydrated` so the
+  // onboarding overlay never opens against a stale snapshot. On a normal
+  // returning-user page load the snapshot is "loading" until
+  // `initAuthStore`'s own probe completes; this extra probe is a small
+  // duplicate of that one, harmless and idempotent.
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
-    if (userState.status === "anonymous") {
-      refreshAuthSnapshot().finally(() => setHydrated(true));
-    } else {
-      setHydrated(true);
-    }
-    // Mount-only — `userState` updates re-render via useSyncExternalStore.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    refreshAuthSnapshot().finally(() => setHydrated(true));
   }, []);
 
   // Onboarding gate: open for brand-new anonymous visitors AND for authenticated
