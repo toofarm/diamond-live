@@ -10,6 +10,7 @@ import {
   clearUser,
   readGuestProfile,
   mergeProfileForUpgrade,
+  refreshAuthSnapshot,
   DEFAULT_NOTIFICATIONS,
   type UserProfile,
 } from "@/lib/storage";
@@ -62,9 +63,26 @@ export default function ShellLayout({ children }: { children: React.ReactNode })
   // snapshot, so `user` reads as null on SSR and the first client render even
   // when a profile exists in localStorage. Wait one effect tick before letting
   // the onboarding overlay open so returning users don't see it flash on mount.
+  //
+  // When this layout is mounting because the user was just redirected here
+  // from a server-action sign-in (/login → /scores via `redirect()`), the
+  // browser auth store is still stale — the server set the auth cookies, but
+  // the browser client's `onAuthStateChange` listener only fires for events
+  // it originated, so the in-memory snapshot is whatever `initAuthStore`
+  // probed before sign-in (anonymous). We re-probe via `refreshAuthSnapshot`
+  // before flipping `hydrated` so the onboarding overlay never opens against
+  // that stale state. For all other mount paths the snapshot is already
+  // "loading" or "authenticated" and we unblock immediately.
   const [hydrated, setHydrated] = useState(false);
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- post-mount hydration flag; React's canonical SSR-skew pattern
-  useEffect(() => setHydrated(true), []);
+  useEffect(() => {
+    if (userState.status === "anonymous") {
+      refreshAuthSnapshot().finally(() => setHydrated(true));
+    } else {
+      setHydrated(true);
+    }
+    // Mount-only — `userState` updates re-render via useSyncExternalStore.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Onboarding gate: open for brand-new anonymous visitors AND for authenticated
   // users who just signed up (Supabase session exists but the profile row's

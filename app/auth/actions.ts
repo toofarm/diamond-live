@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { E2E_MODE } from "@/lib/supabase/env";
 
@@ -25,7 +26,13 @@ export async function signInWithPassword(
   // Re-render every server segment so any server component reading
   // `getClaims()` sees the new session on the next render.
   revalidatePath("/", "layout");
-  return { ok: true };
+  // Navigate on the server (303 from the action) rather than handing the
+  // success result back to the client and letting it call `router.push`.
+  // The client-side push-after-action pattern races on iOS Safari (the
+  // `router.refresh()` we used to call would clear the in-flight RSC fetch
+  // for the destination, leaving `<main>` blank until a manual reload).
+  // `redirect` throws NEXT_REDIRECT and never returns.
+  redirect("/scores");
 }
 
 export async function signUpWithPassword(
@@ -48,10 +55,10 @@ export async function signUpWithPassword(
   // When email confirmation is on (default for new Supabase projects),
   // `signUp` returns no session — the user must confirm via email before
   // they can sign in. When confirmation is off, the session is set and we
-  // can drop them into the app immediately.
+  // can drop them into the app immediately via a server-side redirect.
   if (!data.session) return { ok: true, needsConfirm: true };
   revalidatePath("/", "layout");
-  return { ok: true };
+  redirect("/scores");
 }
 
 export async function signOut(): Promise<void> {

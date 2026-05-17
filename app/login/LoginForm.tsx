@@ -1,17 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Wordmark } from "@/components/ui/primitives";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import { signInWithPassword, signUpWithPassword } from "@/app/auth/actions";
-import { refreshAuthSnapshot } from "@/lib/storage";
 
 type Mode = "signin" | "signup";
 
 export function LoginForm() {
-  const router = useRouter();
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -26,6 +23,10 @@ export function LoginForm() {
     if (!canSubmit) return;
     setMessage(null);
     setBusy(true);
+    // On success, the server action calls `redirect("/scores")` which never
+    // returns — Next commits a 303 and the navigation happens server-side.
+    // We only get a value back on failure or on the sign-up "needs email
+    // confirmation" path, both handled below.
     const result =
       mode === "signin"
         ? await signInWithPassword(trimmedEmail, password)
@@ -47,15 +48,6 @@ export function LoginForm() {
       setPassword("");
       return;
     }
-    // Auth succeeded with a live session. The server action set the session
-    // cookies, but the client-side auth store's `onAuthStateChange` listener
-    // only fires for events triggered by this same browser-client instance —
-    // server-action sign-ins are invisible to it. Force the store to re-probe
-    // BEFORE we navigate, so the destination route renders with the correct
-    // `useUserState()` value on its very first paint (no onboarding flash).
-    await refreshAuthSnapshot();
-    router.push("/scores");
-    router.refresh();
   };
 
   return (
