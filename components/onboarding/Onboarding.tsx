@@ -8,6 +8,7 @@ import { DEFAULT_NOTIFICATIONS, DEFAULT_PREFS, type UserProfile } from "@/lib/st
 import { RecaptchaScript } from "@/components/auth/RecaptchaScript";
 import { RecaptchaNotice } from "@/components/auth/RecaptchaNotice";
 import { executeRecaptcha } from "@/lib/recaptcha-client";
+import { sendToDataLayer, events } from "@/lib/analytics";
 import { verifyGuestRecaptcha } from "@/app/auth/actions";
 
 const GENERIC_ERROR = "Something went wrong. Please try again.";
@@ -58,7 +59,15 @@ export function Onboarding({ onDone, initial, manageMode = false, onCancel, onSi
   const [splashError, setSplashError] = useState<string | null>(null);
 
   const toggle = (abbr: string) =>
-    setSelected((s) => (s.includes(abbr) ? s.filter((x) => x !== abbr) : [...s, abbr]));
+    setSelected((s) => {
+      const adding = !s.includes(abbr);
+      const t = TEAMS[abbr];
+      sendToDataLayer({
+        event: events.TEAM_SELECTION,
+        meta: { team: t ? `${t.city} ${t.name}` : abbr },
+      });
+      return adding ? [...s, abbr] : s.filter((x) => x !== abbr);
+    });
 
   // Gate entry into the guest flow on a successful reCAPTCHA verification.
   // Mirrors the /login Continue-as-guest button: anonymous account creation
@@ -74,6 +83,7 @@ export function Onboarding({ onDone, initial, manageMode = false, onCancel, onSi
       setSplashError(result.error ?? GENERIC_ERROR);
       return;
     }
+    sendToDataLayer({ event: events.CONTINUE_AS_GUEST });
     setSplashBusy(false);
     setStep(1);
   };
@@ -120,9 +130,8 @@ export function Onboarding({ onDone, initial, manageMode = false, onCancel, onSi
             data-cy="splash-signup"
             onClick={onSignUp}
             disabled={splashBusy}
-            className={`${ctaBaseClass} w-full bg-accent text-white mb-2.5 ${
-              splashBusy ? "cursor-default opacity-70" : "cursor-pointer"
-            }`}
+            className={`${ctaBaseClass} w-full bg-accent text-white mb-2.5 ${splashBusy ? "cursor-default opacity-70" : "cursor-pointer"
+              }`}
           >
             Create a profile
           </button>
@@ -130,9 +139,8 @@ export function Onboarding({ onDone, initial, manageMode = false, onCancel, onSi
             data-cy="splash-guest"
             onClick={continueAsGuest}
             disabled={splashBusy}
-            className={`${ctaBaseClass} w-full bg-chip text-ink border border-line ${
-              splashBusy ? "cursor-default opacity-70" : "cursor-pointer"
-            }`}
+            className={`${ctaBaseClass} w-full bg-chip text-ink border border-line ${splashBusy ? "cursor-default opacity-70" : "cursor-pointer"
+              }`}
           >
             {splashBusy ? "Continuing…" : "Continue as guest"}
           </button>
@@ -153,10 +161,10 @@ export function Onboarding({ onDone, initial, manageMode = false, onCancel, onSi
           <h1 className="mt-7 font-head text-[32px] font-bold tracking-[-1.2px] leading-[1.05] text-ink">
             What&rsquo;s your<br />name?
           </h1>
-          <p className="mt-2.5 text-sm text-ink-2 leading-normal max-w-[280px]">
+          <p className="mt-2.5 text-sm text-ink-2 leading-normal max-w-70">
             We&rsquo;ll show this on your profile. You can change it later in Settings.
           </p>
-          <div className="mt-6 bg-surface rounded-[12px] border border-line px-3.5 py-3">
+          <div className="mt-6 bg-surface rounded-xl border border-line px-3.5 py-3">
             <input
               autoFocus
               value={name}
@@ -174,9 +182,8 @@ export function Onboarding({ onDone, initial, manageMode = false, onCancel, onSi
           <button
             onClick={() => trimmed && setStep(2)}
             disabled={!trimmed}
-            className={`${ctaBaseClass} w-full ${
-              trimmed ? "bg-accent text-white cursor-pointer" : "bg-chip text-ink-3 cursor-default"
-            }`}
+            className={`${ctaBaseClass} w-full ${trimmed ? "bg-accent text-white cursor-pointer" : "bg-chip text-ink-3 cursor-default"
+              }`}
           >
             Continue
           </button>
@@ -198,12 +205,12 @@ export function Onboarding({ onDone, initial, manageMode = false, onCancel, onSi
             <>Follow your<br />teams.</>
           )}
         </h1>
-        <p className="mt-2.5 text-sm text-ink-2 leading-normal max-w-[280px]">
+        <p className="mt-2.5 text-sm text-ink-2 leading-normal max-w-70">
           {manageMode
             ? "Adjust which clubs you follow. Changes apply when you confirm."
             : "Pick the clubs you want to track. We'll surface their games at the top of your feed."}
         </p>
-        <div className="mt-[18px] flex items-center gap-2 bg-surface rounded-[12px] border border-line px-3 py-2.5">
+        <div className="mt-4.5 flex items-center gap-2 bg-surface rounded-xl border border-line px-3 py-2.5">
           <IconSearch size={16} stroke="var(--color-ink-3)" />
           <input
             value={query}
@@ -214,12 +221,12 @@ export function Onboarding({ onDone, initial, manageMode = false, onCancel, onSi
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto pt-2 px-6 pb-[140px]">
+      <div className="flex-1 overflow-y-auto pt-2 px-6 pb-35">
         {[
           ["American League", groups.al] as const,
           ["National League", groups.nl] as const,
         ].map(([title, list]) => (
-          <div key={title} className="mt-[18px]">
+          <div key={title} className="mt-4.5">
             <div className="font-head text-[11px] font-semibold tracking-[1.4px] uppercase text-ink-3 mb-2.5">
               {title}
             </div>
@@ -230,11 +237,10 @@ export function Onboarding({ onDone, initial, manageMode = false, onCancel, onSi
                   <button
                     key={t.abbr}
                     onClick={() => toggle(t.abbr)}
-                    className={`flex items-center gap-2.5 p-2.5 rounded-[12px] cursor-pointer text-left font-ui transition-all ${
-                      on
-                        ? "bg-[color-mix(in_srgb,var(--color-accent)_8%,transparent)] border-[1.5px] border-accent"
-                        : "bg-surface border-[1.5px] border-line"
-                    }`}
+                    className={`flex items-center gap-2.5 p-2.5 rounded-xl cursor-pointer text-left font-ui transition-all ${on
+                      ? "bg-[color-mix(in_srgb,var(--color-accent)_8%,transparent)] border-[1.5px] border-accent"
+                      : "bg-surface border-[1.5px] border-line"
+                      }`}
                   >
                     <TeamBadge abbr={t.abbr} size={28} />
                     <div className="flex-1 min-w-0">
@@ -291,11 +297,10 @@ export function Onboarding({ onDone, initial, manageMode = false, onCancel, onSi
               onboarded: true,
             })}
             disabled={!manageMode && selected.length === 0}
-            className={`${ctaBaseClass} ${
-              !manageMode && selected.length === 0
-                ? "bg-chip text-ink-3 cursor-default"
-                : "bg-accent text-white cursor-pointer"
-            }`}
+            className={`${ctaBaseClass} ${!manageMode && selected.length === 0
+              ? "bg-chip text-ink-3 cursor-default"
+              : "bg-accent text-white cursor-pointer"
+              }`}
           >
             {manageMode ? "Confirm selections" : "Continue to scores"}
           </button>

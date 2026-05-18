@@ -33,6 +33,7 @@ export async function signInWithPassword(
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { ok: false, error: error.message };
+
   // Re-render every server segment so any server component reading
   // `getClaims()` sees the new session on the next render.
   revalidatePath("/", "layout");

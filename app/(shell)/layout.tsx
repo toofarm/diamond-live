@@ -22,11 +22,11 @@ import { ShellContext, type ShellState } from "@/lib/shell";
 import { useGameNotifications, usePermissionState } from "@/lib/notifications";
 
 const TABS = [
-  { id: "scores",    label: "Scores",    icon: IconScores },
+  { id: "scores", label: "Scores", icon: IconScores },
   { id: "standings", label: "Standings", icon: IconStandings },
-  { id: "schedule",  label: "Schedule",  icon: IconSchedule },
-  { id: "leaders",   label: "Leaders",   icon: IconLeaders },
-  { id: "settings",  label: "Settings",  icon: IconSettings },
+  { id: "schedule", label: "Schedule", icon: IconSchedule },
+  { id: "leaders", label: "Leaders", icon: IconLeaders },
+  { id: "settings", label: "Settings", icon: IconSettings },
 ];
 
 const TAB_IDS = new Set(TABS.map((t) => t.id));
@@ -224,7 +224,7 @@ export default function ShellLayout({ children }: { children: React.ReactNode })
   return (
     <ShellContext.Provider value={shellState}>
       <div className="dl-app-root">
-        <div className="relative w-full max-w-[1200px] min-h-[100dvh] flex flex-col bg-canvas">
+        <div className="relative w-full max-w-300 min-h-dvh flex flex-col bg-canvas">
           <TopBar
             tabs={TABS}
             current={tab ?? ""}

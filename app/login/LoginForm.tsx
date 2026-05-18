@@ -8,6 +8,7 @@ import { PasswordInput } from "@/components/ui/PasswordInput";
 import { RecaptchaScript } from "@/components/auth/RecaptchaScript";
 import { RecaptchaNotice } from "@/components/auth/RecaptchaNotice";
 import { executeRecaptcha } from "@/lib/recaptcha-client";
+import { sendToDataLayer, events } from "@/lib/analytics";
 import {
   signInWithPassword,
   signUpWithPassword,
@@ -36,6 +37,12 @@ export function LoginForm() {
     if (!canSubmit) return;
     setMessage(null);
     setBusy(true);
+    // Intent-based dataLayer push: fired here rather than on the success
+    // path because successful sign-in / sign-up ends in a server-side
+    // redirect, after which the post-await client code never runs. Failed
+    // attempts will therefore also be logged — pair with an `auth_error`
+    // event later if we want to filter them out in GTM.
+    sendToDataLayer({ event: mode === "signin" ? events.LOGIN : events.SIGNUP });
     // Mint a fresh reCAPTCHA token for this submit. A null token (SDK not
     // loaded, network blocked) is forwarded as-is — the server-side verifier
     // rejects it and surfaces the same generic error as a low-score reply.
@@ -81,6 +88,7 @@ export function LoginForm() {
     // Verification passed — navigate into the shell. The onboarding overlay
     // (which has its own reCAPTCHA gate) takes over from here. We leave
     // `guestBusy` true so the button can't be re-clicked during navigation.
+    sendToDataLayer({ event: events.CONTINUE_AS_GUEST });
     router.push("/scores");
   };
 

@@ -12,6 +12,7 @@ import {
 } from "@/lib/storage";
 import { usePermissionState } from "@/lib/notifications";
 import { signOut } from "@/app/auth/actions";
+import { sendToDataLayer, events } from "@/lib/analytics";
 
 export default function Page() {
   const router = useRouter();
@@ -25,6 +26,10 @@ export default function Page() {
       : { status: "guest" };
 
   const handleSignOut = async () => {
+    // Fire LOGOUT before the action: signOut redirects to /login on success,
+    // and Next's redirect handling means post-await client code doesn't run.
+    // Intent-based tracking is good enough here — sign-out failures are rare.
+    sendToDataLayer({ event: events.LOGOUT });
     // The server action wipes the session cookies and issues a 303 to /login.
     // No client-side push/refresh — those raced on iOS Safari and blanked
     // the destination. The browser auth snapshot is left stale here on

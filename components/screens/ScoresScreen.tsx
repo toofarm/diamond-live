@@ -8,6 +8,7 @@ import { ScoreCard } from "@/components/ui/ScoreCard";
 import { DateStrip, SectionHead } from "@/components/ui/primitives";
 import { IconStar, IconChevron } from "@/components/ui/icons";
 import { useTitle } from "@/lib/title";
+import { sendToDataLayer, events } from "@/lib/analytics";
 
 interface ScoresResp {
   date: string;
@@ -27,6 +28,19 @@ export function ScoresScreen({
   const todayIdx = strip.findIndex((d) => d.today);
   const [dateIdx, setDateIdx] = useState(todayIdx >= 0 ? todayIdx : 7);
   const [mlbCollapsed, setMlbCollapsed] = useState(false);
+
+  // User-initiated calendar move. Fires CALENDAR_NAVIGATION with the
+  // destination's ISO date in `target`. DateStrip calls onSelect on every
+  // click (including the currently-selected pill), so guard against
+  // same-day re-clicks here.
+  const handleDateSelect = (i: number) => {
+    if (i === dateIdx) return;
+    const iso = strip[i]?.iso;
+    if (iso) {
+      sendToDataLayer({ event: events.CALENDAR_NAVIGATION, target: iso });
+    }
+    setDateIdx(i);
+  };
 
   const date = strip[dateIdx]?.iso ?? "";
   const isToday = strip[dateIdx]?.today === true;
@@ -49,7 +63,7 @@ export function ScoresScreen({
   return (
     <>
       <div className="bg-surface border-b border-line">
-        <DateStrip entries={strip} selectedIdx={dateIdx} onSelect={setDateIdx} />
+        <DateStrip entries={strip} selectedIdx={dateIdx} onSelect={handleDateSelect} />
       </div>
 
       <div

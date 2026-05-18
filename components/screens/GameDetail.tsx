@@ -21,6 +21,7 @@ import { IconRefresh } from "@/components/ui/icons";
 import { DEFAULT_PREFS, useUser, type BoxScoreUnits } from "@/lib/storage";
 import { formatLocalTime } from "@/lib/date";
 import { useTitle } from "@/lib/title";
+import { sendToDataLayer, events } from "@/lib/analytics";
 
 /** Format pitch velocity in the user's preferred units. Returns the value + label. */
 function formatVelo(mph: number, units: BoxScoreUnits): { value: string; label: string } {
@@ -94,6 +95,16 @@ export function GameDetail({
 }) {
   const { data, loading, error, refresh, fetching } = useApi<GameDetailData>(`/api/mlb/game/${gameId}`, { pollMs: 15_000 });
   const [tab, setTab] = useState<SubTab>("summary");
+  // User-initiated tab change. Fires TAB_NAVIGATION with the destination tab
+  // in `target` so GTM can attribute engagement per sub-view. Re-clicks of the
+  // active tab are filtered out — those aren't navigations. Programmatic
+  // fallbacks below (e.g., dropping out of "pitches" when pitch-by-pitch is
+  // disabled) intentionally bypass this and call `setTab` directly.
+  const handleTabChange = (next: SubTab) => {
+    if (next === tab) return;
+    sendToDataLayer({ event: events.TAB_NAVIGATION, target: next });
+    setTab(next);
+  };
 
   // Local debounce for the manual-refresh button. The button is disabled
   // whenever a fetch is in flight (`fetching`) AND for a short cooldown
@@ -312,7 +323,7 @@ export function GameDetail({
                   key={t}
                   data-cy="sub-tab"
                   data-cy-tab={t}
-                  onClick={() => setTab(t)}
+                  onClick={() => handleTabChange(t)}
                   className={`px-3.5 py-2 bg-transparent cursor-pointer shrink-0 capitalize font-ui text-[13px] border-b-2 ${on ? "text-ink font-bold border-accent" : "text-ink-2 font-medium border-transparent"
                     }`}
                 >
