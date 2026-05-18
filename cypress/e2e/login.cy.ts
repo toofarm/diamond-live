@@ -15,7 +15,9 @@ describe("/login", () => {
     cy.get("input[type=email]").should("be.visible");
     cy.get("input[type=password]").should("be.visible");
     cy.contains("button", /sign in/i).should("be.visible");
-    cy.get('[data-cy="continue-as-guest"]').should("be.visible").and("have.attr", "href", "/scores");
+    // Continue-as-guest is now a button (was a Link) — it triggers a
+    // recaptcha check via a server action before navigating to /scores.
+    cy.get('[data-cy="continue-as-guest"]').should("be.visible").and("have.text", "Continue as guest");
   });
 
   it("starts in sign-in mode → 'Forgot?' link is visible, 'Create one' toggle is available", () => {

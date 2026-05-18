@@ -17,6 +17,7 @@ import { currentSeason } from "@/lib/date";
 import { useTitle } from "@/lib/title";
 import { useCompareParam } from "@/lib/mlb/useCompareParam";
 import { pickWinner } from "@/lib/mlb/statDirection";
+import { sendToDataLayer, events } from "@/lib/analytics";
 
 type SubTab = "season" | "splits" | "gamelog" | "history";
 
@@ -136,12 +137,20 @@ export function PlayerDetail({
   const team = data?.team ? TEAMS[data.team] : undefined;
   const mode: StatMode = data ? detectMode(data) : "hitting";
   useTitle(data?.fullName);
+  // User-initiated tab change → TAB_NAVIGATION with the destination id. The
+  // tab id (e.g. "splits") is more stable for analytics than the rendered
+  // label, which includes the live season number.
+  const handleTabChange = (next: SubTab) => {
+    if (next === tab) return;
+    sendToDataLayer({ event: events.TAB_NAVIGATION, target: next });
+    setTab(next);
+  };
 
   return (
     <div data-cy="player-detail" className="absolute inset-0 bg-canvas flex flex-col z-10 overflow-hidden">
       <PlayerHero data={data} team={team} onBack={onBack} onTeam={onTeam} loading={loading} />
 
-      {data && <TabNav tab={tab} setTab={setTab} />}
+      {data && <TabNav tab={tab} setTab={handleTabChange} />}
 
       <div className="flex-1 overflow-y-auto w-full max-w-200 mx-auto">
         {error && <div className="p-6 text-neg">Failed to load player.</div>}
@@ -338,6 +347,18 @@ function SeasonTab({ data }: { data: PlayerDetailData }) {
           selectedId={compareOtherId}
           selectedLabel={selectedLabel}
           onSelect={(id) => {
+            // Resolve the selected player's name via the cached directory so
+            // analytics gets human-readable basis/comparison rather than ids.
+            // `items` is already filtered for the current mode, so this lookup
+            // is on the same dataset the user actually picked from.
+            const picked = directory?.players.find((p) => String(p.id) === id);
+            sendToDataLayer({
+              event: events.PLAYER_COMPARISON,
+              meta: {
+                basis: data.fullName,
+                comparison: picked?.fullName ?? id,
+              },
+            });
             setCompare(id);
             setQuery("");
           }}

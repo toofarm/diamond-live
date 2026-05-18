@@ -18,6 +18,7 @@ import { currentSeason, formatDateLabel } from "@/lib/date";
 import { useTitle } from "@/lib/title";
 import { useCompareParam } from "@/lib/mlb/useCompareParam";
 import { pickWinner } from "@/lib/mlb/statDirection";
+import { sendToDataLayer, events } from "@/lib/analytics";
 
 type SubTab = "season" | "roster" | "injuries" | "personnel";
 
@@ -48,6 +49,14 @@ export function TeamDetail({ teamAbbr, onBack, onPlayer, onGame }: TeamDetailPro
   const t = TEAMS[teamAbbr];
   useTitle(t ? `${t.city} ${t.name}` : teamAbbr);
   const [tab, setTab] = useState<SubTab>("season");
+  // User-initiated tab change → TAB_NAVIGATION with the destination id. The
+  // tab id is more stable for analytics than the rendered label (which
+  // includes the live season number for the season tab).
+  const handleTabChange = (next: SubTab) => {
+    if (next === tab) return;
+    sendToDataLayer({ event: events.TAB_NAVIGATION, target: next });
+    setTab(next);
+  };
 
   const TABS: { id: SubTab; label: string }[] = [
     { id: "season",    label: `${currentSeason()} Season` },
@@ -83,7 +92,7 @@ export function TeamDetail({ teamAbbr, onBack, onPlayer, onGame }: TeamDetailPro
                 key={tt.id}
                 data-cy="sub-tab"
                 data-cy-tab={tt.id}
-                onClick={() => setTab(tt.id)}
+                onClick={() => handleTabChange(tt.id)}
                 className={`px-3.5 md:px-4 py-3 bg-transparent cursor-pointer shrink-0 font-ui text-[13px] transition-colors ${
                   on
                     ? "text-ink font-bold border-b-2 border-accent"
@@ -240,6 +249,12 @@ function SeasonTab({
         selectedId={compareAbbr}
         selectedLabel={selectedLabel}
         onSelect={(id) => {
+          // Use abbrs for both basis and comparison — they're the canonical
+          // identifier for teams in this app and unambiguous in dashboards.
+          sendToDataLayer({
+            event: events.TEAM_COMPARISON,
+            meta: { basis: abbr, comparison: id },
+          });
           setCompare(id);
           setQuery("");
         }}

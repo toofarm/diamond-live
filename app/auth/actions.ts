@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { E2E_MODE } from "@/lib/supabase/env";
+import { verifyRecaptchaToken } from "@/lib/recaptcha";
 
 /** Result shape shared by the sign-in / sign-up server actions. `needsConfirm`
  *  is only set on a successful sign-up when the project requires email
@@ -15,14 +16,24 @@ export interface AuthResult {
   needsConfirm?: boolean;
 }
 
+/** Generic copy shown when reCAPTCHA verification fails. We never tell the
+ *  user that bot-detection denied them — both because it leaks the gate to
+ *  an adversary and because false positives shouldn't read as accusations. */
+const RECAPTCHA_GENERIC_ERROR = "Something went wrong. Please try again.";
+
 export async function signInWithPassword(
   email: string,
   password: string,
+  recaptchaToken: string | null,
 ): Promise<AuthResult> {
   if (E2E_MODE) return { ok: false, error: "Auth disabled under E2E_MODE." };
+  if (!(await verifyRecaptchaToken(recaptchaToken, "signin"))) {
+    return { ok: false, error: RECAPTCHA_GENERIC_ERROR };
+  }
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { ok: false, error: error.message };
+
   // Re-render every server segment so any server component reading
   // `getClaims()` sees the new session on the next render.
   revalidatePath("/", "layout");
@@ -38,8 +49,12 @@ export async function signInWithPassword(
 export async function signUpWithPassword(
   email: string,
   password: string,
+  recaptchaToken: string | null,
 ): Promise<AuthResult> {
   if (E2E_MODE) return { ok: false, error: "Auth disabled under E2E_MODE." };
+  if (!(await verifyRecaptchaToken(recaptchaToken, "signup"))) {
+    return { ok: false, error: RECAPTCHA_GENERIC_ERROR };
+  }
   const supabase = await createClient();
   // Default the username to the part of the email before `@` — gives new
   // users a sensible display name without an extra signup field. The
@@ -99,6 +114,26 @@ export async function requestPasswordReset(
     redirectTo: `${origin}/auth/callback?next=/reset-password`,
   });
   if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * Verify a reCAPTCHA token before the client commits to the guest-account
+ * path. The guest profile itself still lives in localStorage — this action
+ * exists purely to gate entry into that flow on a bot-likelihood check.
+ *
+ * Bypassed under E2E_MODE so Cypress can drive the splash → name → teams
+ * flow without producing a real token. In every other environment a missing
+ * or low-score token resolves to the same generic error as sign-in / sign-up
+ * failures.
+ */
+export async function verifyGuestRecaptcha(
+  recaptchaToken: string | null,
+): Promise<AuthResult> {
+  if (E2E_MODE) return { ok: true };
+  if (!(await verifyRecaptchaToken(recaptchaToken, "guest"))) {
+    return { ok: false, error: RECAPTCHA_GENERIC_ERROR };
+  }
   return { ok: true };
 }
 

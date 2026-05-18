@@ -2,38 +2,62 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Wordmark } from "@/components/ui/primitives";
 import { PasswordInput } from "@/components/ui/PasswordInput";
-import { signInWithPassword, signUpWithPassword } from "@/app/auth/actions";
+import { RecaptchaScript } from "@/components/auth/RecaptchaScript";
+import { RecaptchaNotice } from "@/components/auth/RecaptchaNotice";
+import { executeRecaptcha } from "@/lib/recaptcha-client";
+import { sendToDataLayer, events } from "@/lib/analytics";
+import {
+  signInWithPassword,
+  signUpWithPassword,
+  verifyGuestRecaptcha,
+} from "@/app/auth/actions";
 
 type Mode = "signin" | "signup";
 
+const GENERIC_ERROR = "Something went wrong. Please try again.";
+
 export function LoginForm() {
+  const router = useRouter();
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [guestBusy, setGuestBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "error" | "info"; text: string } | null>(null);
 
   const trimmedEmail = email.trim();
-  const canSubmit = trimmedEmail.length > 0 && password.length >= 6 && !busy;
+  const anyBusy = busy || guestBusy;
+  const canSubmit = trimmedEmail.length > 0 && password.length >= 6 && !anyBusy;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
     setMessage(null);
     setBusy(true);
+    // Intent-based dataLayer push: fired here rather than on the success
+    // path because successful sign-in / sign-up ends in a server-side
+    // redirect, after which the post-await client code never runs. Failed
+    // attempts will therefore also be logged — pair with an `auth_error`
+    // event later if we want to filter them out in GTM.
+    sendToDataLayer({ event: mode === "signin" ? events.LOGIN : events.SIGNUP });
+    // Mint a fresh reCAPTCHA token for this submit. A null token (SDK not
+    // loaded, network blocked) is forwarded as-is — the server-side verifier
+    // rejects it and surfaces the same generic error as a low-score reply.
+    const token = await executeRecaptcha(mode === "signin" ? "signin" : "signup");
     // On success, the server action calls `redirect("/scores")` which never
     // returns — Next commits a 303 and the navigation happens server-side.
     // We only get a value back on failure or on the sign-up "needs email
     // confirmation" path, both handled below.
     const result =
       mode === "signin"
-        ? await signInWithPassword(trimmedEmail, password)
-        : await signUpWithPassword(trimmedEmail, password);
+        ? await signInWithPassword(trimmedEmail, password, token)
+        : await signUpWithPassword(trimmedEmail, password, token);
     setBusy(false);
     if (!result.ok) {
-      setMessage({ tone: "error", text: result.error ?? "Something went wrong. Try again." });
+      setMessage({ tone: "error", text: result.error ?? GENERIC_ERROR });
       return;
     }
     if (mode === "signup" && result.needsConfirm) {
@@ -50,8 +74,27 @@ export function LoginForm() {
     }
   };
 
+  const continueAsGuest = async () => {
+    if (anyBusy) return;
+    setMessage(null);
+    setGuestBusy(true);
+    const token = await executeRecaptcha("guest");
+    const result = await verifyGuestRecaptcha(token);
+    if (!result.ok) {
+      setGuestBusy(false);
+      setMessage({ tone: "error", text: result.error ?? GENERIC_ERROR });
+      return;
+    }
+    // Verification passed — navigate into the shell. The onboarding overlay
+    // (which has its own reCAPTCHA gate) takes over from here. We leave
+    // `guestBusy` true so the button can't be re-clicked during navigation.
+    sendToDataLayer({ event: events.CONTINUE_AS_GUEST });
+    router.push("/scores");
+  };
+
   return (
     <div className="dl-app-root">
+      <RecaptchaScript />
       <div className="relative w-full max-w-[480px] min-h-[100dvh] flex flex-col bg-canvas px-6">
         <div className="shrink-0 pt-[calc(env(safe-area-inset-top,0)+40px)]">
           <Wordmark />
@@ -177,16 +220,21 @@ export function LoginForm() {
             <span className="font-mono text-[10px] text-ink-3 tracking-[1.4px] uppercase">or</span>
             <div className="flex-1 h-px bg-line-2" />
           </div>
-          <Link
-            href="/scores"
+          <button
+            type="button"
+            onClick={continueAsGuest}
+            disabled={anyBusy}
             data-cy="continue-as-guest"
-            className="block w-full text-center px-4 py-[14px] rounded-[14px] bg-chip text-ink border border-line no-underline font-head text-[15px] font-semibold tracking-[-0.2px]"
+            className={`block w-full text-center px-4 py-[14px] rounded-[14px] bg-chip text-ink border border-line font-head text-[15px] font-semibold tracking-[-0.2px] ${
+              anyBusy ? "cursor-default opacity-70" : "cursor-pointer"
+            }`}
           >
-            Continue as guest
-          </Link>
+            {guestBusy ? "Continuing…" : "Continue as guest"}
+          </button>
           <p className="mt-2.5 text-center text-[11px] text-ink-3 leading-relaxed">
             Guests can use the full app, but follows and preferences only live on this device.
           </p>
+          <RecaptchaNotice />
         </div>
       </div>
     </div>

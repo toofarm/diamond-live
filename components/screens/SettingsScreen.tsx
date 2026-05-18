@@ -14,6 +14,7 @@ import {
   type PermissionState,
 } from "@/lib/notifications";
 import { useTitle } from "@/lib/title";
+import { sendToDataLayer, events } from "@/lib/analytics";
 
 /** Discriminator for the auth-aware portions of the Settings screen. Guest
  *  users see the upgrade-to-profile CTA; authenticated users see an Account
@@ -179,9 +180,14 @@ export function SettingsScreen({
         <SectionLabel>Appearance</SectionLabel>
         <AppearanceRow
           theme={prefs.theme}
-          onToggle={() =>
-            onUpdatePrefs({ ...prefs, theme: prefs.theme === "twilight" ? "light" : "twilight" })
-          }
+          onToggle={() => {
+            const nextTheme: DisplayPrefs["theme"] = prefs.theme === "twilight" ? "light" : "twilight";
+            sendToDataLayer({
+              event: events.THEME_CHANGE,
+              meta: { theme: nextTheme },
+            });
+            onUpdatePrefs({ ...prefs, theme: nextTheme });
+          }}
         />
 
         {/* ── Alerts ───────────────────────────────────────────── */}
