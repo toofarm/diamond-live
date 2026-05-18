@@ -5,6 +5,12 @@ import { TEAMS } from "@/lib/mlb/teams";
 import { Wordmark, TeamBadge } from "@/components/ui/primitives";
 import { IconSearch, IconCheck } from "@/components/ui/icons";
 import { DEFAULT_NOTIFICATIONS, DEFAULT_PREFS, type UserProfile } from "@/lib/storage";
+import { RecaptchaScript } from "@/components/auth/RecaptchaScript";
+import { RecaptchaNotice } from "@/components/auth/RecaptchaNotice";
+import { executeRecaptcha } from "@/lib/recaptcha-client";
+import { verifyGuestRecaptcha } from "@/app/auth/actions";
+
+const GENERIC_ERROR = "Something went wrong. Please try again.";
 
 interface Props {
   onDone: (profile: UserProfile) => void;
@@ -48,9 +54,29 @@ export function Onboarding({ onDone, initial, manageMode = false, onCancel, onSi
   const [name, setName] = useState(initial?.name ?? "");
   const [selected, setSelected] = useState<string[]>(initial?.follows ?? []);
   const [query, setQuery] = useState("");
+  const [splashBusy, setSplashBusy] = useState(false);
+  const [splashError, setSplashError] = useState<string | null>(null);
 
   const toggle = (abbr: string) =>
     setSelected((s) => (s.includes(abbr) ? s.filter((x) => x !== abbr) : [...s, abbr]));
+
+  // Gate entry into the guest flow on a successful reCAPTCHA verification.
+  // Mirrors the /login Continue-as-guest button: anonymous account creation
+  // is the third of the three actions guarded by the v3 score check.
+  const continueAsGuest = async () => {
+    if (splashBusy) return;
+    setSplashError(null);
+    setSplashBusy(true);
+    const token = await executeRecaptcha("guest");
+    const result = await verifyGuestRecaptcha(token);
+    if (!result.ok) {
+      setSplashBusy(false);
+      setSplashError(result.error ?? GENERIC_ERROR);
+      return;
+    }
+    setSplashBusy(false);
+    setStep(1);
+  };
 
   const groups = useMemo(() => {
     const al: typeof TEAMS[string][] = [];
@@ -70,6 +96,7 @@ export function Onboarding({ onDone, initial, manageMode = false, onCancel, onSi
   if (step === 0 && onSignUp) {
     return (
       <div data-cy="onboarding-splash" className={overlayClass}>
+        <RecaptchaScript />
         <div className="shrink-0 pt-[calc(env(safe-area-inset-top,0)+40px)] px-6 pb-2">
           <Wordmark />
           <h1 className="mt-7 font-head text-[32px] font-bold tracking-[-1.2px] leading-[1.05] text-ink">
@@ -81,21 +108,36 @@ export function Onboarding({ onDone, initial, manageMode = false, onCancel, onSi
         </div>
         <div className="flex-1" />
         <div className={ctaWrapClass}>
+          {splashError && (
+            <div
+              data-cy="splash-error"
+              className="mb-2.5 rounded-[10px] px-3 py-2 text-[13px] font-ui leading-snug bg-[color-mix(in_srgb,var(--color-neg)_10%,transparent)] text-neg"
+            >
+              {splashError}
+            </div>
+          )}
           <button
             data-cy="splash-signup"
             onClick={onSignUp}
-            className={`${ctaBaseClass} w-full bg-accent text-white cursor-pointer mb-2.5`}
+            disabled={splashBusy}
+            className={`${ctaBaseClass} w-full bg-accent text-white mb-2.5 ${
+              splashBusy ? "cursor-default opacity-70" : "cursor-pointer"
+            }`}
           >
             Create a profile
           </button>
           <button
             data-cy="splash-guest"
-            onClick={() => setStep(1)}
-            className={`${ctaBaseClass} w-full bg-chip text-ink border border-line cursor-pointer`}
+            onClick={continueAsGuest}
+            disabled={splashBusy}
+            className={`${ctaBaseClass} w-full bg-chip text-ink border border-line ${
+              splashBusy ? "cursor-default opacity-70" : "cursor-pointer"
+            }`}
           >
-            Continue as guest
+            {splashBusy ? "Continuing…" : "Continue as guest"}
           </button>
           <SignInFallback onSignIn={onSignUp} />
+          <RecaptchaNotice />
         </div>
       </div>
     );

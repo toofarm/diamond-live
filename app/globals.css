@@ -127,3 +127,10 @@
 @media (prefers-reduced-motion: reduce) {
   .dl-live-pulse::after { animation: none; opacity: 0; }
 }
+
+/* Hide the floating reCAPTCHA v3 badge. Google permits this only when the
+   required attribution copy is shown elsewhere — see RecaptchaNotice, which
+   /login and the onboarding splash both render. */
+.grecaptcha-badge {
+  visibility: hidden;
+}
