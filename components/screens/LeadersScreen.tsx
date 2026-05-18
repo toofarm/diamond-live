@@ -5,6 +5,7 @@ import { useApi } from "@/lib/mlb/client";
 import type { LeaderCategory, LeaderGroup, LeaderRow } from "@/lib/mlb/types";
 import { AppBar, Loader, TeamBadge } from "@/components/ui/primitives";
 import { useTitle } from "@/lib/title";
+import { useSlidingPill } from "@/lib/slidingPill";
 
 interface CatMeta {
   id: LeaderCategory;
@@ -70,6 +71,10 @@ export function LeadersScreen({ onPlayer }: { onPlayer: (id: number) => void }) 
   const catsForGroup = CATS.filter((c) => c.group === group);
   const activeCat = catsForGroup.find((c) => c.id === catId) ?? catsForGroup[0];
 
+  // Measure the active pill so the indicator can slide along the track
+  // rather than each button toggling its own background.
+  const { containerRef: groupTrackRef, pos: groupPillPos } = useSlidingPill(group, 3);
+
   function selectGroup(g: LeaderGroup) {
     setGroup(g);
     setCatId(DEFAULT_CAT[g]);
@@ -78,14 +83,26 @@ export function LeadersScreen({ onPlayer }: { onPlayer: (id: number) => void }) 
   return (
     <>
       <AppBar title="Leaders" />
-      <div data-cy="leaders-screen" className="bg-canvas px-3.5 md:px-6 pt-3 pb-25 max-w-[900px] w-full mx-auto">
-        {/* Group toggle — pill segmented control on a tan track */}
+      <div data-cy="leaders-screen" className="bg-canvas px-3.5 md:px-6 pt-3 pb-25 max-w-225 w-full mx-auto">
+        {/* Group toggle — pill segmented control on a tan track. The active
+            indicator is an absolute-positioned span behind the buttons that
+            slides via CSS transitions; see useSlidingPill for the measurement. */}
         <div
+          ref={groupTrackRef}
           className="relative inline-flex w-full p-1 rounded-full"
           style={{ background: "color-mix(in srgb, var(--color-ink) 8%, transparent)" }}
           role="tablist"
           aria-label="Leader group"
         >
+          <span
+            aria-hidden
+            className="absolute inset-y-1 rounded-full bg-accent pointer-events-none transition-[transform,width] duration-200 ease-out"
+            style={{
+              transform: `translateX(${groupPillPos?.left ?? 0}px)`,
+              width: groupPillPos?.width ?? 0,
+              opacity: groupPillPos ? 1 : 0,
+            }}
+          />
           {GROUPS.map((g) => {
             const on = group === g.id;
             return (
@@ -95,8 +112,9 @@ export function LeadersScreen({ onPlayer }: { onPlayer: (id: number) => void }) 
                 aria-selected={on}
                 data-cy="group-tab"
                 data-cy-group={g.id}
+                data-sliding-key={g.id}
                 onClick={() => selectGroup(g.id)}
-                className={`flex-1 py-2.5 rounded-full border-none cursor-pointer font-head text-[15px] font-semibold tracking-[-0.2px] transition-colors ${on ? "bg-accent text-white" : "bg-transparent text-ink-2"
+                className={`relative flex-1 py-2.5 rounded-full border-none bg-transparent cursor-pointer font-head text-[15px] font-semibold tracking-[-0.2px] transition-colors duration-200 ${on ? "text-white" : "text-ink-2"
                   }`}
               >
                 {g.label}
@@ -106,7 +124,7 @@ export function LeadersScreen({ onPlayer }: { onPlayer: (id: number) => void }) 
         </div>
 
         {/* Metric banner — horizontal pill chooser */}
-        <div className="flex gap-2.5 overflow-x-auto py-3.5 -mx-[14px] px-[14px] md:-mx-6 md:px-6">
+        <div className="flex gap-2.5 overflow-x-auto py-3.5 -mx-3.5 px-3.5 md:-mx-6 md:px-6">
           {catsForGroup.map((c) => {
             const on = c.id === activeCat?.id;
             return (
@@ -116,8 +134,8 @@ export function LeadersScreen({ onPlayer }: { onPlayer: (id: number) => void }) 
                 data-cy-metric={c.id}
                 onClick={() => setCatId(c.id)}
                 className={`shrink-0 min-w-[64px] px-4 py-2 rounded-full cursor-pointer font-mono text-[14px] font-bold tracking-[0.3px] transition-colors ${on
-                    ? "bg-ink text-surface border border-ink"
-                    : "bg-transparent text-ink border border-line"
+                  ? "bg-ink text-surface border border-ink"
+                  : "bg-transparent text-ink border border-line"
                   }`}
               >
                 {c.sub}

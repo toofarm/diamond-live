@@ -22,6 +22,7 @@ import { DEFAULT_PREFS, useUser, type BoxScoreUnits } from "@/lib/storage";
 import { formatLocalTime } from "@/lib/date";
 import { useTitle } from "@/lib/title";
 import { sendToDataLayer, events } from "@/lib/analytics";
+import { useSlidingPill } from "@/lib/slidingPill";
 
 /** Format pitch velocity in the user's preferred units. Returns the value + label. */
 function formatVelo(mph: number, units: BoxScoreUnits): { value: string; label: string } {
@@ -943,6 +944,13 @@ function BoxSection({
 
 function PlaysTab({ plays }: { plays: Play[] }) {
   const [scoringOnly, setScoringOnly] = useState(false);
+  // Slide the indicator between All/Scoring rather than toggling each pill's
+  // own background. The key matches the `data-sliding-key` on each button;
+  // paddingOffset (3) matches the `p-1` track — same value Leaders uses.
+  const { containerRef: filterTrackRef, pos: filterPillPos } = useSlidingPill(
+    scoringOnly ? "scoring" : "all",
+    3,
+  );
   if (plays.length === 0) {
     return <div className="p-6 text-ink-3 text-center">No plays yet.</div>;
   }
@@ -950,9 +958,19 @@ function PlaysTab({ plays }: { plays: Play[] }) {
   return (
     <div className="flex flex-col gap-3">
       <div
+        ref={filterTrackRef}
         data-cy="plays-filter"
-        className="flex items-center gap-1 bg-surface border border-line rounded-full p-1 self-end"
+        className="relative flex items-center gap-1 bg-surface border border-line rounded-full p-1 self-end"
       >
+        <span
+          aria-hidden
+          className="absolute inset-y-1 rounded-full bg-accent pointer-events-none transition-[transform,width] duration-200 ease-out"
+          style={{
+            transform: `translateX(${filterPillPos?.left ?? 0}px)`,
+            width: filterPillPos?.width ?? 0,
+            opacity: filterPillPos ? 1 : 0,
+          }}
+        />
         {([
           ["all", "All", false],
           ["scoring", "Scoring", true],
@@ -964,9 +982,10 @@ function PlaysTab({ plays }: { plays: Play[] }) {
               type="button"
               data-cy="plays-filter-option"
               data-cy-filter={key}
+              data-sliding-key={key}
               aria-pressed={on}
               onClick={() => setScoringOnly(value)}
-              className={`px-3 py-1 rounded-full border-none cursor-pointer font-ui text-[11px] font-bold uppercase tracking-[0.8px] ${on ? "bg-accent text-white" : "bg-transparent text-ink-2"
+              className={`relative px-3 py-1 rounded-full border-none bg-transparent cursor-pointer font-ui text-[11px] font-bold uppercase tracking-[0.8px] transition-colors duration-200 ${on ? "text-white" : "text-ink-2"
                 }`}
             >
               {label}
