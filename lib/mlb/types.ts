@@ -68,6 +68,9 @@ export interface BoxLineupRow {
   pos: string;
   ab: number; r: number; h: number; rbi: number; bb: number; k: number;
   avg?: string;
+  /** True when this row is a substitute (pinch hit / pinch run / defensive sub)
+   *  taking over an existing lineup slot, not a starter. The UI indents these. */
+  isSub?: boolean;
 }
 
 export interface PitchUsageEntry {
@@ -89,10 +92,33 @@ export interface BoxPitchingRow {
   live?: boolean;
 }
 
-export interface WinProbability {
-  /** 0–100, sums to 100 with home. */
-  away: number;
+export interface WinProbabilityPlay {
+  /** MLB's atBatIndex — stable, monotonic per plate appearance.
+   *  Used both for sort order and as the chart's x-axis key. */
+  atBatIndex: number;
+  /** Home team's win probability after this play, 0–100. */
   home: number;
+  /** Away team's win probability after this play, 0–100. Always 100-home. */
+  away: number;
+  /** Inning the play occurred in, 1-indexed. */
+  inning?: number;
+  /** Which half of the inning. */
+  half?: HalfInning;
+  /** Short play description for hover/tooltip context. */
+  desc?: string;
+  /** Score after the play, used in tooltips. */
+  awayScore?: number;
+  homeScore?: number;
+}
+
+export interface WinProbability {
+  /** Per-play win-probability series, oldest first. Drives the line chart. */
+  plays: WinProbabilityPlay[];
+  /** Most recent home win probability, 0–100. Denormalized convenience for
+   *  the numeric readout that sits above the chart. */
+  home: number;
+  /** Most recent away win probability, 0–100. Sums to 100 with home. */
+  away: number;
 }
 
 export type SprayOutcome = "HR" | "3B" | "2B" | "1B" | "OUT";
@@ -118,6 +144,27 @@ export interface BatterSpray {
   points: SprayPoint[];
 }
 
+export interface PitcherRef {
+  id: number;
+  fullName: string;
+}
+
+/** Pitchers credited with the decision on a completed game. Any of the three
+ *  may be absent: a save isn't credited on every win, and certain finishes
+ *  (suspended games, rare scorer decisions) can omit winner/loser too. */
+export interface GameDecisions {
+  winner?: PitcherRef;
+  loser?: PitcherRef;
+  save?: PitcherRef;
+}
+
+/** Listed starting pitchers for an upcoming game. Either side may be unset
+ *  if the team hasn't named their starter yet. */
+export interface ProbableStarters {
+  away?: PitcherRef;
+  home?: PitcherRef;
+}
+
 export interface GameDetailData {
   summary: GameSummary;
   linescore: Linescore | null;
@@ -130,6 +177,10 @@ export interface GameDetailData {
   winProbability: WinProbability | null;
   /** Per-batter batted-ball spray points for the current game. */
   spray: BatterSpray[];
+  /** Scorer decisions (W/L/SV). Present on FINAL games. */
+  decisions?: GameDecisions;
+  /** Listed probable starters. Most useful on SCHEDULED games. */
+  probableStarters?: ProbableStarters;
 }
 
 export interface AtBat {

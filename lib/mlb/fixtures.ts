@@ -190,7 +190,36 @@ export const FIXTURE_LIVE_GAME: GameDetailData = {
     ],
     isComplete: false,
   },
-  winProbability: { away: 68, home: 32 },
+  winProbability: {
+    // Synthetic per-play series for the fixture: a back-and-forth game that
+    // currently favors the away team (68/32). atBatIndex increments by 1 per
+    // play. Inning labels mostly align with how a real WP series progresses.
+    plays: [
+      { atBatIndex: 0, home: 50, away: 50, inning: 1, half: "TOP", desc: "Top 1: leadoff out", awayScore: 0, homeScore: 0 },
+      { atBatIndex: 1, home: 52, away: 48, inning: 1, half: "TOP", desc: "Strikeout", awayScore: 0, homeScore: 0 },
+      { atBatIndex: 2, home: 54, away: 46, inning: 1, half: "TOP", desc: "Inning over", awayScore: 0, homeScore: 0 },
+      { atBatIndex: 3, home: 56, away: 44, inning: 1, half: "BOT", desc: "Walk", awayScore: 0, homeScore: 0 },
+      { atBatIndex: 4, home: 62, away: 38, inning: 1, half: "BOT", desc: "Double", awayScore: 0, homeScore: 0 },
+      { atBatIndex: 5, home: 71, away: 29, inning: 1, half: "BOT", desc: "Schwarber HR (2)", awayScore: 0, homeScore: 2 },
+      { atBatIndex: 6, home: 70, away: 30, inning: 2, half: "TOP", desc: "Groundout", awayScore: 0, homeScore: 2 },
+      { atBatIndex: 7, home: 68, away: 32, inning: 2, half: "TOP", desc: "Lindor single", awayScore: 0, homeScore: 2 },
+      { atBatIndex: 8, home: 60, away: 40, inning: 2, half: "TOP", desc: "Alonso 2B, run scores", awayScore: 1, homeScore: 2 },
+      { atBatIndex: 9, home: 58, away: 42, inning: 2, half: "BOT", desc: "Strikeout", awayScore: 1, homeScore: 2 },
+      { atBatIndex: 10, home: 55, away: 45, inning: 3, half: "TOP", desc: "Vientos walk", awayScore: 1, homeScore: 2 },
+      { atBatIndex: 11, home: 45, away: 55, inning: 3, half: "TOP", desc: "Marte 2-run HR", awayScore: 3, homeScore: 2 },
+      { atBatIndex: 12, home: 48, away: 52, inning: 3, half: "BOT", desc: "Harper walk", awayScore: 3, homeScore: 2 },
+      { atBatIndex: 13, home: 52, away: 48, inning: 3, half: "BOT", desc: "Turner double", awayScore: 3, homeScore: 2 },
+      { atBatIndex: 14, home: 50, away: 50, inning: 4, half: "TOP", desc: "Flyout", awayScore: 3, homeScore: 2 },
+      { atBatIndex: 15, home: 42, away: 58, inning: 4, half: "TOP", desc: "RBI single", awayScore: 4, homeScore: 2 },
+      { atBatIndex: 16, home: 40, away: 60, inning: 4, half: "BOT", desc: "K", awayScore: 4, homeScore: 2 },
+      { atBatIndex: 17, home: 38, away: 62, inning: 5, half: "TOP", desc: "Walk", awayScore: 4, homeScore: 2 },
+      { atBatIndex: 18, home: 36, away: 64, inning: 5, half: "TOP", desc: "Hit by pitch", awayScore: 4, homeScore: 2 },
+      { atBatIndex: 19, home: 34, away: 66, inning: 5, half: "BOT", desc: "Groundout", awayScore: 4, homeScore: 2 },
+      { atBatIndex: 20, home: 32, away: 68, inning: 6, half: "TOP", desc: "Senga K, runner on", awayScore: 4, homeScore: 2 },
+    ],
+    home: 32,
+    away: 68,
+  },
   spray: [
     {
       batterId: 596019,
