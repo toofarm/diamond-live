@@ -10,12 +10,15 @@ import type {
   AtBat,
   BoxLineupRow,
   BoxPitchingRow,
+  GameDecisions,
   GameDetailData,
   GameSummary,
+  HalfInning,
   LeaderRow,
   Linescore,
   PersonnelRow,
   Pitch,
+  PitcherRef,
   Play,
   PlayerCareerTotals,
   PlayerDetailData,
@@ -24,6 +27,7 @@ import type {
   PlayerHistoryData,
   PlayerHistoryYear,
   PlayerSplitRow,
+  ProbableStarters,
   RosterRow,
   ScheduleGame,
   StandingsByDivision,
@@ -32,6 +36,8 @@ import type {
   TeamLastGame,
   TeamSeasonRecord,
   TeamSeasonStats,
+  WinProbability,
+  WinProbabilityPlay,
 } from "./types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -93,6 +99,17 @@ function readPitcher(p: any): string | undefined {
   if (!p) return undefined;
   // schedule hydrate shape: { fullName }
   return p.fullName ?? p.lastName ?? undefined;
+}
+
+/** Read a clickable pitcher reference (id + display name) from a raw MLB
+ *  person/pitcher object. Returns undefined when either piece is missing so
+ *  callers can decide whether to render a row at all. */
+function readPitcherRef(p: any): PitcherRef | undefined {
+  if (!p) return undefined;
+  const id = Number(p.id);
+  const fullName = p.fullName ?? p.name;
+  if (!Number.isFinite(id) || id <= 0 || !fullName) return undefined;
+  return { id, fullName };
 }
 
 /** Pull the per-game team W-L from a team-side object. Two upstream shapes:
@@ -321,15 +338,27 @@ function emptyStats() {
 
 function mapBoxLineup(side: any): BoxLineupRow[] {
   const players = side?.players ?? {};
-  const battingOrder: Array<number | string> = side?.battingOrder ?? [];
+  // MLB encodes each batter's lineup slot as a 3-digit `battingOrder` string:
+  // `NN0` is the starter at slot NN, and `NN1`/`NN2`… are substitutions at
+  // that slot in arrival order. Walking `players` (rather than the team-level
+  // `battingOrder` array, which contains only starter IDs) lets us surface
+  // pinch hitters / pinch runners / defensive subs and mark them as `isSub`
+  // for the indented box-score row treatment. Multiple subs at one slot all
+  // get `isSub: true` — they're each indented once, never compounding.
+  const slotted: Array<{ p: any; orderNum: number }> = [];
+  for (const key of Object.keys(players)) {
+    const p = players[key];
+    const orderNum = Number(p?.battingOrder);
+    if (!Number.isFinite(orderNum) || orderNum <= 0) continue;
+    slotted.push({ p, orderNum });
+  }
+  slotted.sort((a, b) => a.orderNum - b.orderNum);
+
   const rows: BoxLineupRow[] = [];
-  for (const raw of battingOrder) {
-    const id = typeof raw === "string" ? raw.replace(/^ID/, "") : String(raw);
-    const p = players[`ID${id}`];
-    if (!p) continue;
+  for (const { p, orderNum } of slotted) {
     const stats = p?.stats?.batting ?? emptyStats();
     rows.push({
-      id: p?.person?.id ?? Number(id) ?? 0,
+      id: p?.person?.id ?? 0,
       name: p?.person?.fullName ?? "—",
       pos: p?.position?.abbreviation ?? "",
       ab: stats.atBats ?? 0,
@@ -339,8 +368,8 @@ function mapBoxLineup(side: any): BoxLineupRow[] {
       bb: stats.baseOnBalls ?? 0,
       k: stats.strikeOuts ?? 0,
       avg: p?.seasonStats?.batting?.avg ?? "",
+      isSub: orderNum % 100 !== 0,
     });
-    if (rows.length >= 9) break; // starting 9
   }
   return rows;
 }
@@ -606,6 +635,38 @@ export function mapGameDetail(
     homeId,
   );
 
+  // Scorer decisions on completed games. `liveData.decisions` is populated
+  // once the game is final; mid-game it's absent. Each field is independently
+  // optional — a win without a save is normal — so we only attach the object
+  // if at least one role resolved.
+  const decRaw = live?.decisions;
+  const decisions: GameDecisions | undefined = decRaw
+    ? {
+      winner: readPitcherRef(decRaw.winner),
+      loser: readPitcherRef(decRaw.loser),
+      save: readPitcherRef(decRaw.save),
+    }
+    : undefined;
+  const decisionsPopulated =
+    decisions && (decisions.winner || decisions.loser || decisions.save)
+      ? decisions
+      : undefined;
+
+  // Listed probable starters. `gameData.probablePitchers` exists pre-game and
+  // is preserved through the game's lifecycle; we only surface it on the
+  // pre-game view so we don't double up with the actual W/L/SV credits.
+  const probRaw = game?.probablePitchers;
+  const probableStarters: ProbableStarters | undefined = probRaw
+    ? {
+      away: readPitcherRef(probRaw.away),
+      home: readPitcherRef(probRaw.home),
+    }
+    : undefined;
+  const probablesPopulated =
+    probableStarters && (probableStarters.away || probableStarters.home)
+      ? probableStarters
+      : undefined;
+
   return {
     summary,
     linescore,
@@ -617,6 +678,8 @@ export function mapGameDetail(
     atBat,
     winProbability,
     spray,
+    decisions: decisionsPopulated,
+    probableStarters: probablesPopulated,
   };
 }
 
@@ -790,32 +853,57 @@ function decoratePitching(
 }
 
 /**
- * Pull the most recent home/away win probability from the dedicated
- * `/api/v1/game/{gamePk}/winProbability` endpoint, which returns an array of
- * play entries each with `homeTeamWinProbability` and `awayTeamWinProbability`
- * (0–100). We scan from the end for the latest entry that has those set.
- * Returns null if unavailable (pregame, missing endpoint payload, etc.) — the
- * live feed itself does NOT carry per-play win-probability fields, so we rely
- * on this auxiliary endpoint instead.
+ * Build a full win-probability series from the `/api/v1/game/{gamePk}/winProbability`
+ * payload, which returns an array of play entries each with
+ * `homeTeamWinProbability` and `awayTeamWinProbability` (0–100), plus
+ * inning / score / result context. We keep every entry that has the home
+ * probability set and emit them in atBatIndex order so the UI can draw a line
+ * chart of how the game swung play by play. The most recent values are
+ * denormalized onto the top-level `home`/`away` fields for the numeric readout.
+ *
+ * Returns null when the endpoint isn't populated yet (pregame, missing payload).
+ * The live feed itself does NOT carry per-play win-probability fields, so we
+ * rely on this auxiliary endpoint instead.
  */
-function readWinProbability(
-  wpFeed: any,
-): { home: number; away: number } | null {
+function readWinProbability(wpFeed: any): WinProbability | null {
   const entries = Array.isArray(wpFeed) ? wpFeed : [];
-  for (let i = entries.length - 1; i >= 0; i--) {
+  const plays: WinProbabilityPlay[] = [];
+  for (let i = 0; i < entries.length; i++) {
     const p = entries[i];
-    const home = p?.homeTeamWinProbability;
-    const away = p?.awayTeamWinProbability;
-    if (typeof home === "number" && Number.isFinite(home)) {
-      const h = Math.max(0, Math.min(100, home));
-      const a =
-        typeof away === "number" && Number.isFinite(away)
-          ? Math.max(0, Math.min(100, away))
-          : 100 - h;
-      return { home: h, away: a };
-    }
+    const homeRaw = p?.homeTeamWinProbability;
+    if (typeof homeRaw !== "number" || !Number.isFinite(homeRaw)) continue;
+    const awayRaw = p?.awayTeamWinProbability;
+    const home = Math.max(0, Math.min(100, homeRaw));
+    const away =
+      typeof awayRaw === "number" && Number.isFinite(awayRaw)
+        ? Math.max(0, Math.min(100, awayRaw))
+        : 100 - home;
+    const halfRaw = String(p?.about?.halfInning ?? "").toLowerCase();
+    const half: HalfInning | undefined =
+      halfRaw === "top" ? "TOP" : halfRaw === "bottom" ? "BOT" : undefined;
+    plays.push({
+      atBatIndex:
+        typeof p?.atBatIndex === "number" ? p.atBatIndex : plays.length,
+      home,
+      away,
+      inning:
+        typeof p?.about?.inning === "number" ? p.about.inning : undefined,
+      half,
+      desc: p?.result?.description ?? undefined,
+      awayScore:
+        typeof p?.result?.awayScore === "number"
+          ? p.result.awayScore
+          : undefined,
+      homeScore:
+        typeof p?.result?.homeScore === "number"
+          ? p.result.homeScore
+          : undefined,
+    });
   }
-  return null;
+  if (plays.length === 0) return null;
+  plays.sort((a, b) => a.atBatIndex - b.atBatIndex);
+  const last = plays[plays.length - 1];
+  return { plays, home: last.home, away: last.away };
 }
 
 /* ── Leaders ─────────────────────────────────────────────────────────────── */
@@ -1266,8 +1354,21 @@ function mapYears(json: any, mode: StatMode): PlayerHistoryYear[] {
     }
     years.push(base);
   }
-  years.sort((a, b) => a.year - b.year);
-  return years;
+
+  // When a player switches teams mid-season the yearByYear feed returns one
+  // split per team plus a season-total roll-up that has no team attached.
+  // Keeping the roll-up double-counts the year in our per-row UI (and in the
+  // year-summary column totals), so drop it whenever per-team rows exist for
+  // the same season. A teamless row on a season with no team-specific
+  // siblings is kept — that's the API's only signal for that year.
+  const perYearCount = new Map<number, number>();
+  for (const y of years) perYearCount.set(y.year, (perYearCount.get(y.year) ?? 0) + 1);
+  const deduped = years.filter(
+    (y) => !(y.team == null && (perYearCount.get(y.year) ?? 0) > 1),
+  );
+
+  deduped.sort((a, b) => a.year - b.year);
+  return deduped;
 }
 
 function mapCareer(

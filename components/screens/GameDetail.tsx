@@ -1,19 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { area as d3Area, curveMonotoneX, line as d3Line, scaleLinear } from "d3";
 import { useApi } from "@/lib/mlb/client";
 import type {
   AtBat,
   BatterSpray,
   BoxLineupRow,
   BoxPitchingRow,
+  GameDecisions,
   GameDetailData,
   Pitch,
+  PitcherRef,
   Play,
+  ProbableStarters,
   SprayOutcome,
   SprayPoint,
   TeamRecord,
   WinProbability,
+  WinProbabilityPlay,
 } from "@/lib/mlb/types";
 import { TEAMS } from "@/lib/mlb/teams";
 import { BackChevron, TeamBadge, BaseDiamond, Loader, OutDots } from "@/components/ui/primitives";
@@ -312,6 +317,7 @@ export function GameDetail({
                 />
               </div>
             )}
+
           </div>
         )}
 
@@ -426,6 +432,113 @@ function TeamColumn({
   );
 }
 
+/** "Kodai Senga" → "K. Senga". Falls back to the input when the name isn't
+ *  obviously a "First Last" pair (single-token mononyms, suffixes, etc.). */
+function shortName(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length < 2 || !parts[0]) return fullName;
+  return `${parts[0][0]}. ${parts.slice(1).join(" ")}`;
+}
+
+/** Strip shown beneath the box-score cards on FINAL games crediting W / L / SV.
+ *  Each role is its own button so tapping a name jumps to that pitcher's
+ *  detail page. Roles that don't apply (e.g. no save) are omitted. */
+function DecisionsStrip({
+  decisions,
+  onPlayer,
+}: {
+  decisions: GameDecisions;
+  onPlayer: (id: number) => void;
+}) {
+  const entries: Array<{ key: string; label: string; p: PitcherRef | undefined }> = [
+    { key: "w", label: "W", p: decisions.winner },
+    { key: "l", label: "L", p: decisions.loser },
+    { key: "sv", label: "SV", p: decisions.save },
+  ];
+  const visible = entries.filter((e) => e.p);
+  if (visible.length === 0) return null;
+  return (
+    <div
+      data-cy="decisions-strip"
+      className="px-1 flex items-baseline gap-x-4 gap-y-1 flex-wrap"
+    >
+      {visible.map(({ key, label, p }) => (
+        <button
+          key={key}
+          data-cy="decision"
+          data-cy-decision={key}
+          onClick={() => onPlayer(p!.id)}
+          className="bg-transparent border-none cursor-pointer p-0 flex items-baseline gap-1"
+        >
+          <span className="font-mono text-[9px] tracking-[1.2px] text-ink-3 font-bold uppercase">
+            {label}
+          </span>
+          <span className="font-head text-[11px] font-bold text-ink tracking-[-0.2px]">
+            {shortName(p!.fullName)}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Strip shown beneath the (empty) box-score cards on SCHEDULED games listing
+ *  each team's probable starter. Either slot may be empty if a team hasn't
+ *  named their starter — those render as "TBD". */
+function ProbablesStrip({
+  away,
+  home,
+  starters,
+  onPlayer,
+}: {
+  away: string;
+  home: string;
+  starters: ProbableStarters;
+  onPlayer: (id: number) => void;
+}) {
+  return (
+    <div
+      data-cy="probables-strip"
+      className="px-1 flex items-baseline gap-2 flex-wrap"
+    >
+      <ProbablePitcher abbr={away} pitcher={starters.away} onPlayer={onPlayer} />
+      <span className="font-mono text-[9px] tracking-[1.2px] text-ink-3 font-bold uppercase">
+        vs
+      </span>
+      <ProbablePitcher abbr={home} pitcher={starters.home} onPlayer={onPlayer} />
+    </div>
+  );
+}
+
+function ProbablePitcher({
+  abbr,
+  pitcher,
+  onPlayer,
+}: {
+  abbr: string;
+  pitcher: PitcherRef | undefined;
+  onPlayer: (id: number) => void;
+}) {
+  return (
+    <span className="inline-flex items-baseline gap-1">
+      <span className="font-mono text-[9px] tracking-[1.2px] text-ink-3 font-bold uppercase">
+        {abbr}
+      </span>
+      {pitcher ? (
+        <button
+          data-cy="probable-pitcher"
+          onClick={() => onPlayer(pitcher.id)}
+          className="bg-transparent border-none cursor-pointer p-0 font-head text-[11px] font-bold text-ink tracking-[-0.2px]"
+        >
+          {shortName(pitcher.fullName)}
+        </button>
+      ) : (
+        <span className="font-head text-[11px] text-ink-3 tracking-[-0.2px]">TBD</span>
+      )}
+    </span>
+  );
+}
+
 /* ── Summary tab ──────────────────────────────────────────────── */
 
 function SummaryTab({
@@ -439,7 +552,7 @@ function SummaryTab({
   units: BoxScoreUnits;
   showWinProbability: boolean;
 }) {
-  const { summary, linescore, plays, atBat, winProbability } = data;
+  const { summary, linescore, plays, atBat, winProbability, decisions, probableStarters } = data;
 
   // The server now hands us the freshest available at-bat: either the live one
   // (isComplete=false) or, between at-bats, the just-finished one with its
@@ -500,6 +613,18 @@ function SummaryTab({
             );
           })}
         </div>
+      )}
+
+      {summary.status === "FINAL" && decisions && (
+        <DecisionsStrip decisions={decisions} onPlayer={onPlayer} />
+      )}
+      {summary.status === "SCHEDULED" && probableStarters && (
+        <ProbablesStrip
+          away={summary.away}
+          home={summary.home}
+          starters={probableStarters}
+          onPlayer={onPlayer}
+        />
       )}
 
       {showWinProbability && winProbability && (
@@ -571,18 +696,325 @@ function WinProbabilityCard({
       <div className="text-[10px] tracking-[1.2px] uppercase text-ink-3 font-bold mb-3">
         Win Probability
       </div>
-      <div className="flex items-center gap-2.5">
-        <TeamBadge abbr={away} size={28} />
-        <div className="flex-1 h-3.5 rounded-full overflow-hidden flex bg-chip">
-          <div style={{ width: `${awayPct}%`, background: awayColor }} />
-          <div style={{ width: `${homePct}%`, background: homeColor }} />
+
+      {/* Current-state strip: team badges flanking the current %. The chart's
+          rightmost point shows the same info implicitly, but a numeric readout
+          stays useful as a quick glance before the eye finds the line's right
+          edge — and unambiguous when probabilities cluster near 50%. */}
+      <div className="flex items-center mb-3">
+        <div className="flex items-center gap-1.5">
+          <TeamBadge abbr={away} size={22} />
+          <span className="font-mono text-[15px] font-bold text-ink tracking-[-0.3px]">
+            {awayPct}%
+          </span>
         </div>
-        <TeamBadge abbr={home} size={28} />
-      </div>
-      <div className="mt-2 flex items-center font-mono text-[15px] font-bold text-ink tracking-[-0.3px]">
-        <span>{awayPct}%</span>
         <div className="flex-1" />
-        <span>{homePct}%</span>
+        <div className="flex items-center gap-1.5 flex-row-reverse">
+          <TeamBadge abbr={home} size={22} />
+          <span className="font-mono text-[15px] font-bold text-ink tracking-[-0.3px]">
+            {homePct}%
+          </span>
+        </div>
+      </div>
+
+      {probs.plays.length >= 2 ? (
+        <WinProbabilityChart
+          plays={probs.plays}
+          away={away}
+          home={home}
+          awayColor={awayColor}
+          homeColor={homeColor}
+        />
+      ) : (
+        <div className="text-[11px] text-ink-3 font-mono py-3 text-center">
+          Chart populates once plays begin.
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Win-probability line chart drawn over the per-play series. The line is the
+ *  home team's win probability; the area between the line and the 50% midline
+ *  is shaded in the home color when home is favored and the away color when
+ *  away is favored, giving an at-a-glance sense of which team has held the
+ *  edge over the course of the game.
+ *
+ *  Rendering pattern: React owns the DOM, d3 owns the math. We use d3-scale
+ *  for axis mapping and d3-shape for the line/area path-`d` strings, then
+ *  render the SVG with plain JSX — no refs, no useEffect, no .selectAll().
+ *  Re-renders flow naturally when `plays` changes; d3 work is memoized so
+ *  hover state changes don't re-run it.
+ *
+ *  Interaction: pointer-move tracks the nearest play and surfaces its detail
+ *  in the panel beneath the chart. `touch-action: pan-y` lets the page still
+ *  scroll vertically on mobile while horizontal moves drive the cursor. */
+function WinProbabilityChart({
+  plays,
+  away,
+  home,
+  awayColor,
+  homeColor,
+}: {
+  plays: WinProbabilityPlay[];
+  away: string;
+  home: string;
+  awayColor: string;
+  homeColor: string;
+}) {
+  // `useId` colons are valid in HTML5 ids but trip some URL parsers when used
+  // in `url(#…)` references — sanitize defensively.
+  const rawId = useId();
+  const safeId = rawId.replace(/[^A-Za-z0-9_-]/g, "-");
+  const aboveClipId = `wpc-above-${safeId}`;
+  const belowClipId = `wpc-below-${safeId}`;
+
+  const W = 320;
+  const H = 130;
+  const padL = 8;
+  const padR = 8;
+  const padT = 8;
+  const padB = 18; // room for inning labels along the bottom
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+
+  // All d3 work is pure functions of `plays`. Memoize so hover-driven
+  // re-renders don't recompute scales, generators, and inning ticks.
+  const { x, y, midY, areaPath, linePath, inningTicks } = useMemo(() => {
+    const xScale = scaleLinear()
+      .domain([0, Math.max(1, plays.length - 1)])
+      .range([padL, padL + innerW]);
+    const yScale = scaleLinear().domain([0, 100]).range([padT + innerH, padT]);
+    const mid = yScale(50);
+
+    // One area generator from the 50% baseline up/down to the home line. The
+    // same path string gets drawn twice with two different clipPaths — clipped
+    // to the upper half it stains home-color, clipped to the lower half it
+    // stains away-color. One generator, two visual effects.
+    const areaGen = d3Area<WinProbabilityPlay>()
+      .x((_, i) => xScale(i))
+      .y0(mid)
+      .y1((d) => yScale(d.home))
+      .curve(curveMonotoneX);
+    const lineGen = d3Line<WinProbabilityPlay>()
+      .x((_, i) => xScale(i))
+      .y((d) => yScale(d.home))
+      .curve(curveMonotoneX);
+
+    const ticks: Array<{ x: number; inning: number }> = [];
+    const seen = new Set<number>();
+    plays.forEach((p, i) => {
+      if (p.inning != null && !seen.has(p.inning)) {
+        seen.add(p.inning);
+        ticks.push({ x: xScale(i), inning: p.inning });
+      }
+    });
+
+    return {
+      x: xScale,
+      y: yScale,
+      midY: mid,
+      areaPath: areaGen(plays) ?? "",
+      linePath: lineGen(plays) ?? "",
+      inningTicks: ticks,
+    };
+  }, [plays, innerW, innerH]);
+
+  /** Convert a client-space pointer event to the nearest play index. The
+   *  viewBox lets us proportionally map the bounding-rect-relative x straight
+   *  to chart space without going through `createSVGPoint`/`getScreenCTM`. */
+  const idxFromPointer = (e: React.PointerEvent<SVGSVGElement>): number | null => {
+    const svg = svgRef.current;
+    if (!svg) return null;
+    const rect = svg.getBoundingClientRect();
+    if (rect.width === 0) return null;
+    const svgX = ((e.clientX - rect.left) / rect.width) * W;
+    const dataIdx = Math.round(x.invert(svgX));
+    if (dataIdx < 0 || dataIdx >= plays.length) return null;
+    return dataIdx;
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    const idx = idxFromPointer(e);
+    setHoverIdx(idx);
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    // On touch, capturing the pointer lets us keep tracking even if the
+    // finger drifts slightly outside the SVG before lifting.
+    if (e.pointerType !== "mouse") {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    }
+    const idx = idxFromPointer(e);
+    setHoverIdx(idx);
+  };
+
+  const handlePointerLeave = () => setHoverIdx(null);
+
+  // The play surfaced in the info panel — hovered if active, latest otherwise.
+  // Always showing something keeps the card a stable height and gives readers
+  // useful context at rest (description + score for the most recent play).
+  const activeIdx = hoverIdx ?? plays.length - 1;
+  const activePlay = plays[activeIdx];
+  // Probability swing from the previous play. Null at the very first play
+  // since there's no prior state to diff against.
+  const swing =
+    activeIdx > 0 ? activePlay.home - plays[activeIdx - 1].home : null;
+  const swingFavored: "home" | "away" | null =
+    swing == null || Math.abs(swing) < 0.05 ? null : swing > 0 ? "home" : "away";
+
+  return (
+    <div data-cy="win-probability-chart">
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${W} ${H}`}
+        className="w-full h-auto block cursor-crosshair"
+        style={{ touchAction: "pan-y" }}
+        role="img"
+        aria-label="Win probability over the course of the game"
+        onPointerMove={handlePointerMove}
+        onPointerDown={handlePointerDown}
+        onPointerLeave={handlePointerLeave}
+        onPointerCancel={handlePointerLeave}
+      >
+        <defs>
+          <clipPath id={aboveClipId}>
+            <rect x={padL} y={padT} width={innerW} height={Math.max(0, midY - padT)} />
+          </clipPath>
+          <clipPath id={belowClipId}>
+            <rect x={padL} y={midY} width={innerW} height={Math.max(0, padT + innerH - midY)} />
+          </clipPath>
+        </defs>
+
+        <rect
+          x={padL}
+          y={padT}
+          width={innerW}
+          height={innerH}
+          fill="var(--color-chip)"
+          opacity={0.4}
+          rx={3}
+        />
+
+        {inningTicks.map((t) => (
+          <line
+            key={`tick-${t.inning}`}
+            x1={t.x}
+            y1={padT}
+            x2={t.x}
+            y2={padT + innerH}
+            stroke="var(--color-line-2)"
+            strokeWidth={0.5}
+          />
+        ))}
+
+        <line
+          x1={padL}
+          y1={midY}
+          x2={padL + innerW}
+          y2={midY}
+          stroke="var(--color-line)"
+          strokeWidth={0.75}
+          strokeDasharray="3 3"
+        />
+
+        <path
+          d={areaPath}
+          fill={homeColor}
+          fillOpacity={0.45}
+          clipPath={`url(#${aboveClipId})`}
+        />
+        <path
+          d={areaPath}
+          fill={awayColor}
+          fillOpacity={0.45}
+          clipPath={`url(#${belowClipId})`}
+        />
+
+        <path d={linePath} fill="none" stroke="var(--color-ink)" strokeWidth={1.5} />
+
+        {inningTicks.map((t) => (
+          <text
+            key={`lbl-${t.inning}`}
+            x={t.x}
+            y={padT + innerH + 11}
+            fontSize={9}
+            fill="var(--color-ink-3)"
+            textAnchor="middle"
+            fontFamily="var(--font-mono)"
+          >
+            {t.inning}
+          </text>
+        ))}
+
+        {hoverIdx != null && (
+          <>
+            <line
+              x1={x(hoverIdx)}
+              y1={padT}
+              x2={x(hoverIdx)}
+              y2={padT + innerH}
+              stroke="var(--color-ink-2)"
+              strokeWidth={1}
+              pointerEvents="none"
+            />
+            <circle
+              cx={x(hoverIdx)}
+              cy={y(plays[hoverIdx].home)}
+              r={3.5}
+              fill="var(--color-ink)"
+              stroke="var(--color-surface)"
+              strokeWidth={1.25}
+              pointerEvents="none"
+            />
+          </>
+        )}
+      </svg>
+
+      <div
+        data-cy="wp-play-info"
+        data-cy-hovering={hoverIdx != null ? "true" : "false"}
+        className="mt-2 px-1"
+      >
+        <div className="flex items-baseline gap-2 font-mono text-[10px] text-ink-3 tracking-[0.4px]">
+          <span className="font-bold text-ink-2 uppercase">
+            {activePlay.half ?? ""} {activePlay.inning ?? "—"}
+          </span>
+          {activePlay.awayScore != null && activePlay.homeScore != null && (
+            <span>
+              {away} {activePlay.awayScore}
+              <span className="text-ink-3"> – </span>
+              {activePlay.homeScore} {home}
+            </span>
+          )}
+          <div className="flex-1" />
+          <span style={{ color: awayColor }} className="font-bold">
+            {Math.round(activePlay.away)}%
+          </span>
+          {swing != null && swingFavored && (
+            <span
+              className="font-bold"
+              style={{
+                color: swingFavored === "home" ? homeColor : awayColor,
+              }}
+              aria-label={`${swingFavored === "home" ? home : away} gained ${Math.abs(swing).toFixed(1)} percent`}
+            >
+              {swingFavored === "home" ? "▲" : "▼"}
+              {Math.abs(swing).toFixed(1)}
+            </span>
+          )}
+          <span style={{ color: homeColor }} className="font-bold">
+            {Math.round(activePlay.home)}%
+          </span>
+        </div>
+        {activePlay.desc && (
+          <div className="mt-1 text-[12px] text-ink leading-snug line-clamp-2">
+            {activePlay.desc}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -882,11 +1314,14 @@ function BoxSection({
             key={r.id}
             data-cy="box-player-row"
             data-cy-player-id={r.id}
+            data-cy-sub={r.isSub ? "true" : undefined}
             onClick={() => onPlayer(r.id)}
             className="w-full grid items-center px-3.5 py-2 bg-transparent border-none cursor-pointer text-left border-b border-line-2"
             style={{ gridTemplateColumns: "1.6fr 24px 24px 24px 24px 24px 24px 40px" }}
           >
-            <span className="font-ui text-[13px] text-ink overflow-hidden text-ellipsis whitespace-nowrap">
+            <span
+              className={`font-ui text-[13px] text-ink overflow-hidden text-ellipsis whitespace-nowrap ${r.isSub ? "pl-4 text-ink-2" : ""}`}
+            >
               {r.name} <span className="text-ink-3 text-[10px]">{r.pos}</span>
             </span>
             {(["ab", "r", "h", "rbi", "bb", "k"] as const).map((k) => (
@@ -1103,22 +1538,36 @@ function PitcherUsage({ pitcher }: { pitcher: BoxPitchingRow }) {
 
   return (
     <div>
-      <div className="flex items-baseline gap-2 mb-2.5">
-        <span className="font-head text-[20px] font-bold text-ink tracking-[-0.5px] leading-none">
-          {pitcher.name}
-        </span>
-        {pitcher.live && (
-          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold tracking-[1.2px] text-live">
-            <span className="w-1.5 h-1.5 rounded-full bg-live" />
-            LIVE
+      <div className="mb-2.5">
+        <div className="flex items-baseline gap-2">
+          <span className="font-head text-[20px] font-bold text-ink tracking-[-0.5px] leading-none">
+            {pitcher.name}
           </span>
-        )}
-        <div className="flex-1" />
-        <span className="font-mono text-[13px]">
+          {pitcher.live && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold tracking-[1.2px] text-live">
+              <span className="w-1.5 h-1.5 rounded-full bg-live" />
+              LIVE
+            </span>
+          )}
+        </div>
+        <div className="mt-1 font-mono text-[12px] flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
           <span className="font-bold text-ink">{pitcher.pitches ?? total}P</span>
-          <span className="text-ink-3"> · </span>
+          <span className="text-ink-3">·</span>
           <span className="text-ink-2">{pitcher.ip} IP</span>
-        </span>
+          <span className="text-ink-3">·</span>
+          <span className="text-ink-2">
+            <span className="text-ink font-bold">{pitcher.k}</span>K
+          </span>
+          <span className="text-ink-2">
+            <span className="text-ink font-bold">{pitcher.bb}</span>BB
+          </span>
+          <span className="text-ink-2">
+            <span className="text-ink font-bold">{pitcher.h}</span>H
+          </span>
+          <span className="text-ink-2">
+            <span className="text-ink font-bold">{pitcher.er}</span>ER
+          </span>
+        </div>
       </div>
 
       <div className="h-2.5 rounded-sm overflow-hidden flex bg-chip mb-3">
