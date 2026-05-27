@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useApi } from "@/lib/mlb/client";
 import type { LeaderCategory, LeaderGroup, LeaderRow } from "@/lib/mlb/types";
 import { AppBar, Loader, TeamBadge } from "@/components/ui/primitives";
 import { useTitle } from "@/lib/title";
 import { useSlidingPill } from "@/lib/slidingPill";
+import { useQueryUpdater } from "@/lib/mlb/queryParams";
 
 interface CatMeta {
   id: LeaderCategory;
@@ -45,6 +47,8 @@ const GROUPS: { id: LeaderGroup; label: string }[] = [
   { id: "fielding", label: "Fielding" },
 ];
 
+const DEFAULT_GROUP: LeaderGroup = "hitting";
+
 const DEFAULT_CAT: Record<LeaderGroup, LeaderCategory> = {
   hitting: "AVG",
   pitching: "ERA",
@@ -65,19 +69,41 @@ export function LeadersScreen({ onPlayer }: { onPlayer: (id: number) => void }) 
     leaders: Partial<Record<LeaderCategory, LeaderRow[]>>;
   }>("/api/mlb/leaders", { cacheMs: 300_000 });
 
-  const [group, setGroup] = useState<LeaderGroup>("hitting");
-  const [catId, setCatId] = useState<LeaderCategory>("AVG");
-
+  // Persist group + metric in the URL so back navigation from a player
+  // detail restores the same view. Each param is stripped when it equals
+  // the default for its group so an untouched /leaders URL stays clean.
+  const searchParams = useSearchParams();
+  const updateQuery = useQueryUpdater();
+  const groupRaw = searchParams.get("group");
+  const group: LeaderGroup =
+    groupRaw && GROUPS.some((g) => g.id === groupRaw)
+      ? (groupRaw as LeaderGroup)
+      : DEFAULT_GROUP;
   const catsForGroup = CATS.filter((c) => c.group === group);
+  const catRaw = searchParams.get("cat");
+  const catId: LeaderCategory =
+    catRaw && catsForGroup.some((c) => c.id === catRaw)
+      ? (catRaw as LeaderCategory)
+      : DEFAULT_CAT[group];
   const activeCat = catsForGroup.find((c) => c.id === catId) ?? catsForGroup[0];
 
   // Measure the active pill so the indicator can slide along the track
   // rather than each button toggling its own background.
   const { containerRef: groupTrackRef, pos: groupPillPos } = useSlidingPill(group, 3);
 
+  function writeUrl(g: LeaderGroup, c: LeaderCategory) {
+    updateQuery({
+      group: g === DEFAULT_GROUP ? null : g,
+      cat: c === DEFAULT_CAT[g] ? null : c,
+    });
+  }
+
   function selectGroup(g: LeaderGroup) {
-    setGroup(g);
-    setCatId(DEFAULT_CAT[g]);
+    writeUrl(g, DEFAULT_CAT[g]);
+  }
+
+  function selectCat(c: LeaderCategory) {
+    writeUrl(group, c);
   }
 
   return (
@@ -132,7 +158,7 @@ export function LeadersScreen({ onPlayer }: { onPlayer: (id: number) => void }) 
                 key={c.id}
                 data-cy="metric-pill"
                 data-cy-metric={c.id}
-                onClick={() => setCatId(c.id)}
+                onClick={() => selectCat(c.id)}
                 className={`shrink-0 min-w-[64px] px-4 py-2 rounded-full cursor-pointer font-mono text-[14px] font-bold tracking-[0.3px] transition-colors ${on
                   ? "bg-ink text-surface border border-ink"
                   : "bg-transparent text-ink border border-line"

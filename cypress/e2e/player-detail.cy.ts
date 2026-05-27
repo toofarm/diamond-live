@@ -116,3 +116,76 @@ describe("/player/[id]", () => {
     });
   });
 });
+
+// Added 2026-05-27 for the Pitches sub-tab arsenal visualizations. Senga
+// (605135) is the pitcher fixture; the chart components are auth-gated so
+// these tests exercise both the guest sign-up prompt and the authenticated
+// chart render path.
+describe("/player/[id] → Pitches tab (arsenal visualizations)", () => {
+  beforeEach(() => {
+    cy.intercept("GET", "/api/mlb/player/605135",                  { fixture: "player-detail-senga.json" }).as("player");
+    cy.intercept("GET", "/api/mlb/players*",                       { fixture: "active-players.json" }).as("directory");
+    cy.intercept("GET", "/api/analytics/pitcher-arsenal/605135*",  { fixture: "pitcher-arsenal-senga.json" }).as("arsenal");
+    cy.intercept("GET", "/api/analytics/league-pitch-summary*",    { fixture: "league-pitch-summary.json" }).as("league");
+  });
+
+  it("guest viewer → Pitches sub-tab shows sign-up prompt with redirect link to /login", () => {
+    cy.visitAsUser("/player/605135");
+    cy.wait("@player");
+    cy.get('[data-cy="sub-tab"][data-cy-tab="pitches"]').click();
+    cy.get('[data-cy="pitches-signup-prompt"]').should("be.visible");
+    cy.get('[data-cy="pitches-signup-cta"]')
+      .should("have.attr", "href")
+      .and("include", "/login?redirect=");
+    cy.get('[data-cy="pitches-signin-link"]').should("be.visible");
+    // Analytics endpoints must never be called when the user isn't authed —
+    // the gate is at the component, not just the API.
+    cy.get('[data-cy="pitch-arsenal-chart"]').should("not.exist");
+  });
+
+  it("authenticated viewer + ?tab=pitches → metric pills, arsenal bubbles, legend, and vs-league bars all render", () => {
+    cy.visitAsAuthenticatedUser("/player/605135?tab=pitches");
+    cy.wait("@player");
+    cy.wait("@arsenal");
+    cy.wait("@league");
+
+    // All seven metric pills present, Usage selected by default.
+    cy.get('[data-cy="pitch-metric-pill"]').should("have.length", 7);
+    cy.get('[data-cy="pitch-metric-pill"][data-cy-metric="usage_pct"]')
+      .should("have.attr", "aria-selected", "true");
+
+    // Arsenal bubble chart + heading reflects the default metric.
+    cy.get('[data-cy="pitch-arsenal-chart"]').should("be.visible");
+    cy.get('[data-cy="pitch-arsenal-heading"]').should("contain", "Pitch Usage");
+
+    // One legend row per pitch in the fixture (FF, FS, CU, SL, CH).
+    cy.get('[data-cy="pitch-arsenal-row"]').should("have.length", 5);
+    // Legend sorts by magnitude desc — Usage: FF (38.2%) leads.
+    cy.get('[data-cy="pitch-arsenal-row"]').first().should("contain", "FF").and("contain", "38.2%");
+
+    // Pitcher-vs-league chart with one diverging row per matched pitch.
+    // `exist` (not `be.visible`) because the chart sits below the legend
+    // table — on the 402×874 mobile viewport it lands below the fold.
+    cy.get('[data-cy="pitcher-vs-league-chart"]').should("exist");
+    cy.get('[data-cy="pitcher-vs-league-heading"]').should("contain", "Pitch Usage vs League Average");
+    cy.get('[data-cy="vs-league-row"]').should("have.length", 5);
+  });
+
+  it("click the Velo metric pill → headings, legend values, and sort order all switch to velocity", () => {
+    cy.visitAsAuthenticatedUser("/player/605135?tab=pitches");
+    cy.wait("@player");
+    cy.wait("@arsenal");
+    cy.wait("@league");
+
+    cy.get('[data-cy="pitch-metric-pill"][data-cy-metric="avg_start_speed"]').click();
+    cy.get('[data-cy="pitch-metric-pill"][data-cy-metric="avg_start_speed"]')
+      .should("have.attr", "aria-selected", "true");
+
+    cy.get('[data-cy="pitch-arsenal-heading"]').should("contain", "Average Velocity");
+    cy.get('[data-cy="pitcher-vs-league-heading"]').should("contain", "Average Velocity vs League Average");
+
+    // Legend re-sorts by velocity desc — FF (96.4 mph) is now the top row
+    // and its value renders with the mph unit.
+    cy.get('[data-cy="pitch-arsenal-row"]').first().should("contain", "FF").and("contain", "96.4 mph");
+  });
+});

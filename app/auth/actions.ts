@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { E2E_MODE } from "@/lib/supabase/env";
 import { verifyRecaptchaToken } from "@/lib/recaptcha";
+import { safeRedirectPath } from "@/app/auth/redirect";
 
 /** Result shape shared by the sign-in / sign-up server actions. `needsConfirm`
  *  is only set on a successful sign-up when the project requires email
@@ -25,6 +26,7 @@ export async function signInWithPassword(
   email: string,
   password: string,
   recaptchaToken: string | null,
+  redirectTo?: string,
 ): Promise<AuthResult> {
   if (E2E_MODE) return { ok: false, error: "Auth disabled under E2E_MODE." };
   if (!(await verifyRecaptchaToken(recaptchaToken, "signin"))) {
@@ -43,13 +45,18 @@ export async function signInWithPassword(
   // `router.refresh()` we used to call would clear the in-flight RSC fetch
   // for the destination, leaving `<main>` blank until a manual reload).
   // `redirect` throws NEXT_REDIRECT and never returns.
-  redirect("/scores");
+  //
+  // Re-validate `redirectTo` on the server even though the page-level
+  // validator already ran in the parent server component — a custom client
+  // could call this action directly with any string.
+  redirect(safeRedirectPath(redirectTo, "/scores"));
 }
 
 export async function signUpWithPassword(
   email: string,
   password: string,
   recaptchaToken: string | null,
+  redirectTo?: string,
 ): Promise<AuthResult> {
   if (E2E_MODE) return { ok: false, error: "Auth disabled under E2E_MODE." };
   if (!(await verifyRecaptchaToken(recaptchaToken, "signup"))) {
@@ -73,7 +80,7 @@ export async function signUpWithPassword(
   // can drop them into the app immediately via a server-side redirect.
   if (!data.session) return { ok: true, needsConfirm: true };
   revalidatePath("/", "layout");
-  redirect("/scores");
+  redirect(safeRedirectPath(redirectTo, "/scores"));
 }
 
 export async function signOut(): Promise<void> {

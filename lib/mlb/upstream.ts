@@ -13,7 +13,7 @@ export async function mlb<T>(
   const url = path.startsWith("http") ? path : `${BASE}${path}`;
   const res = await fetch(url, {
     next: { revalidate: opts.revalidate ?? 60 },
-    headers: { "User-Agent": "diamond-live/0.1" },
+    headers: { "User-Agent": "game-state/0.1" },
   });
   if (!res.ok) {
     throw new Error(`MLB API ${res.status} ${res.statusText}: ${path}`);

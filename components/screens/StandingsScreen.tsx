@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
 import { useApi } from "@/lib/mlb/client";
 import type { StandingsByDivision } from "@/lib/mlb/types";
 import { TEAMS } from "@/lib/mlb/teams";
 import { AppBar, Loader, TeamBadge } from "@/components/ui/primitives";
 import { useTitle } from "@/lib/title";
 import { useSlidingPill } from "@/lib/slidingPill";
+import { useTabParam } from "@/lib/mlb/queryParams";
+
+type League = "AL" | "NL";
+const LEAGUES: readonly League[] = ["AL", "NL"];
 
 interface Resp {
   season: number;
@@ -16,7 +19,7 @@ interface Resp {
 export function StandingsScreen({ onTeam }: { onTeam: (abbr: string) => void }) {
   useTitle("Standings");
   const { data, loading, error } = useApi<Resp>("/api/mlb/standings", { cacheMs: 300_000 });
-  const [league, setLeague] = useState<"AL" | "NL">("AL");
+  const [league, setLeague] = useTabParam<League>("league", "AL", LEAGUES);
 
   // Slide the indicator between AL/NL rather than toggling each pill's own
   // background color. The track lives in the AppBar's trailing slot below.
@@ -39,7 +42,7 @@ export function StandingsScreen({ onTeam }: { onTeam: (abbr: string) => void }) 
                 opacity: leaguePillPos ? 1 : 0,
               }}
             />
-            {(["AL", "NL"] as const).map((l) => (
+            {LEAGUES.map((l) => (
               <button
                 key={l}
                 data-cy="league-toggle"
