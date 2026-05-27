@@ -1,10 +1,11 @@
 "use client";
 
+import { Suspense } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { TeamDetail } from "@/components/screens/TeamDetail";
 import { smartBack } from "@/lib/shell";
 
-export default function Page() {
+function TeamPageInner() {
   const router = useRouter();
   const params = useParams<{ abbr: string }>();
   return (
@@ -14,5 +15,13 @@ export default function Page() {
       onPlayer={(pid) => router.push(`/player/${pid}`)}
       onGame={(gid) => router.push(`/game/${gid}`)}
     />
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={null}>
+      <TeamPageInner />
+    </Suspense>
   );
 }
