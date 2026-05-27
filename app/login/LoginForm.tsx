@@ -19,7 +19,13 @@ type Mode = "signin" | "signup";
 
 const GENERIC_ERROR = "Something went wrong. Please try again.";
 
-export function LoginForm() {
+interface LoginFormProps {
+  /** Validated same-origin path to redirect to on successful sign-in / sign-up.
+   *  The parent page resolves this from `?redirect=` (defaults to /scores). */
+  redirectTo: string;
+}
+
+export function LoginForm({ redirectTo }: LoginFormProps) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
@@ -53,8 +59,8 @@ export function LoginForm() {
     // confirmation" path, both handled below.
     const result =
       mode === "signin"
-        ? await signInWithPassword(trimmedEmail, password, token)
-        : await signUpWithPassword(trimmedEmail, password, token);
+        ? await signInWithPassword(trimmedEmail, password, token, redirectTo)
+        : await signUpWithPassword(trimmedEmail, password, token, redirectTo);
     setBusy(false);
     if (!result.ok) {
       setMessage({ tone: "error", text: result.error ?? GENERIC_ERROR });
