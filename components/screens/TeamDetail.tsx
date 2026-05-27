@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useApi } from "@/lib/mlb/client";
+import { useTabParam } from "@/lib/mlb/queryParams";
 import type {
   PersonnelData,
   PersonnelRow,
@@ -21,6 +22,8 @@ import { pickWinner } from "@/lib/mlb/statDirection";
 import { sendToDataLayer, events } from "@/lib/analytics";
 
 type SubTab = "season" | "roster" | "injuries" | "personnel";
+
+const SUB_TABS: readonly SubTab[] = ["season", "roster", "injuries", "personnel"];
 
 const GROUP_LABEL: Record<string, string> = {
   pitchers: "Pitchers",
@@ -48,7 +51,7 @@ interface TeamDetailProps {
 export function TeamDetail({ teamAbbr, onBack, onPlayer, onGame }: TeamDetailProps) {
   const t = TEAMS[teamAbbr];
   useTitle(t ? `${t.city} ${t.name}` : teamAbbr);
-  const [tab, setTab] = useState<SubTab>("season");
+  const [tab, setTab] = useTabParam<SubTab>("tab", "season", SUB_TABS);
   // User-initiated tab change → TAB_NAVIGATION with the destination id. The
   // tab id is more stable for analytics than the rendered label (which
   // includes the live season number for the season tab).

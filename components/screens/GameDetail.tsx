@@ -26,8 +26,10 @@ import { IconRefresh } from "@/components/ui/icons";
 import { DEFAULT_PREFS, useUser, type BoxScoreUnits } from "@/lib/storage";
 import { formatLocalTime } from "@/lib/date";
 import { useTitle } from "@/lib/title";
+import { useTabParam } from "@/lib/mlb/queryParams";
 import { sendToDataLayer, events } from "@/lib/analytics";
 import { useSlidingPill } from "@/lib/slidingPill";
+import { PITCH_TYPE_NAMES, pitchColor } from "@/lib/mlb/pitchTypes";
 
 /** Format pitch velocity in the user's preferred units. Returns the value + label. */
 function formatVelo(mph: number, units: BoxScoreUnits): { value: string; label: string } {
@@ -39,6 +41,8 @@ function formatVelo(mph: number, units: BoxScoreUnits): { value: string; label: 
 }
 
 type SubTab = "summary" | "box" | "plays" | "pitches" | "spray";
+
+const SUB_TABS: readonly SubTab[] = ["summary", "box", "plays", "pitches", "spray"];
 
 const SPRAY_COLORS: Record<SprayOutcome, string> = {
   HR: "#C73E1D",
@@ -54,34 +58,6 @@ const PITCH_RESULT_COLORS: Record<Pitch["result"], { fill: string; ink: string; 
   "foul-2k": { fill: "#8A8077", ink: "#fff", label: "Foul" },
   inplay: { fill: "#2F6BD9", ink: "#fff", label: "In play" },
 };
-
-const PITCH_TYPE_NAMES: Record<string, string> = {
-  FF: "4-Seam", FT: "2-Seam", SI: "Sinker", SL: "Slider",
-  CB: "Curve", CU: "Curve", CH: "Changeup",
-  CT: "Cutter", FC: "Cutter", FS: "Splitter",
-  KC: "Knuckle", EP: "Eephus", FO: "Forkball",
-};
-
-/** Color per pitch type, used in the pitch-usage card on the Pitches tab. */
-const PITCH_USAGE_COLORS: Record<string, string> = {
-  FF: "#B83A2A", // 4-Seam — rust red
-  FT: "#B83A2A", // 2-Seam
-  SI: "#D97C2A", // Sinker — orange
-  SL: "#2F6BD9", // Slider — cobalt
-  FS: "#5DA3DA", // Splitter — sky blue
-  CT: "#B95A92", // Cutter — magenta
-  FC: "#B95A92",
-  CB: "#5B3DAA", // Curve — purple
-  CU: "#5B3DAA",
-  KC: "#5B3DAA",
-  CH: "#2E9D5B", // Changeup — green
-  EP: "#8A8077",
-  FO: "#8A8077",
-};
-
-function pitchColor(code: string): string {
-  return PITCH_USAGE_COLORS[code] ?? "#8A8077";
-}
 
 function ord(n?: number) {
   if (!n) return "";
@@ -100,7 +76,7 @@ export function GameDetail({
   onTeam: (abbr: string) => void;
 }) {
   const { data, loading, error, refresh, fetching } = useApi<GameDetailData>(`/api/mlb/game/${gameId}`, { pollMs: 15_000 });
-  const [tab, setTab] = useState<SubTab>("summary");
+  const [tab, setTab] = useTabParam<SubTab>("tab", "summary", SUB_TABS);
   // User-initiated tab change. Fires TAB_NAVIGATION with the destination tab
   // in `target` so GTM can attribute engagement per sub-view. Re-clicks of the
   // active tab are filtered out — those aren't navigations. Programmatic
@@ -178,10 +154,12 @@ export function GameDetail({
       : null,
   );
 
-  // If the user disables pitch-by-pitch while viewing it, fall back to summary.
-  if (!prefs.pitchByPitch && tab === "pitches") {
-    setTab("summary");
-  }
+  // If the user disables pitch-by-pitch while viewing it — or arrives via a
+  // stale ?tab=pitches URL — fall back to summary. Must be an effect now that
+  // setTab writes to the router; calling that during render warns.
+  useEffect(() => {
+    if (!prefs.pitchByPitch && tab === "pitches") setTab("summary");
+  }, [prefs.pitchByPitch, tab, setTab]);
 
   // Collapse the hero (team columns + big score) once the user starts scrolling
   // and fold the team scores into the bases/outs strip below. Only meaningful
