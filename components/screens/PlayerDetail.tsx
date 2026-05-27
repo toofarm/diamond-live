@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useApi } from "@/lib/mlb/client";
+import { useTabParam } from "@/lib/mlb/queryParams";
 import type {
   ActivePlayersData,
   PlayerDetailData,
@@ -17,13 +19,31 @@ import { currentSeason } from "@/lib/date";
 import { useTitle } from "@/lib/title";
 import { useCompareParam } from "@/lib/mlb/useCompareParam";
 import { pickWinner } from "@/lib/mlb/statDirection";
+import { useUserState } from "@/lib/storage";
+import { PitchArsenalChart } from "@/components/charts/PitchArsenalChart";
 import { sendToDataLayer, events } from "@/lib/analytics";
 
-type SubTab = "season" | "splits" | "gamelog" | "history";
+type SubTab = "season" | "splits" | "pitches" | "gamelog" | "history";
 
-const TABS: { id: SubTab; label: string }[] = [
+// Union of every tab id we'll accept from the URL. Per-mode tab lists below
+// gate which ones actually render; an off-mode tab (e.g. ?tab=pitches for a
+// hitter) is caught by the validation effect and reset to "season".
+const ALL_TABS: readonly SubTab[] = ["season", "splits", "pitches", "gamelog", "history"];
+
+// Tabs diverge by mode: hitters get the Splits tab, pitchers get the
+// Pitches tab in the same slot. Everything else (Season, Gamelog, History)
+// is shared. Kept as two separate constants rather than a function so the
+// labels can be computed once at module load.
+const TABS_HITTER: { id: SubTab; label: string }[] = [
   { id: "season", label: `${currentSeason()} Season` },
   { id: "splits", label: "Splits" },
+  { id: "gamelog", label: "Gamelog" },
+  { id: "history", label: "History" },
+];
+
+const TABS_PITCHER: { id: SubTab; label: string }[] = [
+  { id: "season", label: `${currentSeason()} Season` },
+  { id: "pitches", label: "Pitches" },
   { id: "gamelog", label: "Gamelog" },
   { id: "history", label: "History" },
 ];
@@ -133,9 +153,10 @@ export function PlayerDetail({
   onTeam: (abbr: string) => void;
 }) {
   const { data, loading, error } = useApi<PlayerDetailData>(`/api/mlb/player/${personId}`, { cacheMs: 300_000 });
-  const [tab, setTab] = useState<SubTab>("season");
+  const [tab, setTab] = useTabParam<SubTab>("tab", "season", ALL_TABS);
   const team = data?.team ? TEAMS[data.team] : undefined;
   const mode: StatMode = data ? detectMode(data) : "hitting";
+  const tabs = mode === "pitching" ? TABS_PITCHER : TABS_HITTER;
   useTitle(data?.fullName);
   // User-initiated tab change → TAB_NAVIGATION with the destination id. The
   // tab id (e.g. "splits") is more stable for analytics than the rendered
@@ -146,16 +167,27 @@ export function PlayerDetail({
     setTab(next);
   };
 
+  // Reset to Season when the active tab id doesn't exist in the current
+  // mode's tab list — e.g. user was on "pitches" for a pitcher, then the
+  // route swaps to a hitter and the component instance is reused. Without
+  // this, TabNav would render with no active highlight and the body would
+  // render nothing.
+  useEffect(() => {
+    if (!data) return;
+    if (!tabs.some((t) => t.id === tab)) setTab("season");
+  }, [data, tabs, tab, setTab]);
+
   return (
     <div data-cy="player-detail" className="absolute inset-0 bg-canvas flex flex-col z-10 overflow-hidden">
       <PlayerHero data={data} team={team} onBack={onBack} onTeam={onTeam} loading={loading} />
 
-      {data && <TabNav tab={tab} setTab={handleTabChange} />}
+      {data && <TabNav tabs={tabs} tab={tab} setTab={handleTabChange} />}
 
       <div className="flex-1 overflow-y-auto w-full max-w-200 mx-auto">
         {error && <div className="p-6 text-neg">Failed to load player.</div>}
         {data && tab === "season" && <SeasonTab data={data} />}
-        {data && tab === "splits" && <SplitsTab personId={personId} mode={mode} />}
+        {data && tab === "splits" && mode === "hitting" && <SplitsTab personId={personId} mode={mode} />}
+        {data && tab === "pitches" && mode === "pitching" && <PitchesTab personId={personId} />}
         {data && tab === "gamelog" && <GamelogTab personId={personId} mode={mode} />}
         {data && tab === "history" && <HistoryTab personId={personId} mode={mode} />}
       </div>
@@ -248,11 +280,19 @@ function PlayerHero({
 
 /* ── Tabs ─────────────────────────────────────────────────────── */
 
-function TabNav({ tab, setTab }: { tab: SubTab; setTab: (t: SubTab) => void }) {
+function TabNav({
+  tabs,
+  tab,
+  setTab,
+}: {
+  tabs: { id: SubTab; label: string }[];
+  tab: SubTab;
+  setTab: (t: SubTab) => void;
+}) {
   return (
     <div className="bg-surface border-b border-line-2">
       <div className="w-full max-w-200 mx-auto flex overflow-x-auto">
-        {TABS.map((t) => {
+        {tabs.map((t) => {
           const on = tab === t.id;
           return (
             <button
@@ -322,9 +362,9 @@ function SeasonTab({ data }: { data: PlayerDetailData }) {
   // Short compare-column header — use last word of name to fit a narrow column.
   const compareLabel = compareOtherId
     ? (compareData?.fullName ?? selectedPlayer?.fullName ?? "Compare")
-        .trim()
-        .split(/\s+/)
-        .slice(-1)[0]
+      .trim()
+      .split(/\s+/)
+      .slice(-1)[0]
     : undefined;
   const compareLoading = !!compareOtherId && compareFetching && !compareData;
 
@@ -595,6 +635,73 @@ function SplitsTab({ personId, mode }: { personId: number; mode: StatMode }) {
   );
 }
 
+/* ── Pitches tab ──────────────────────────────────────────────── */
+
+/** Pitcher-only sub-tab. Visualizations are auth-gated because the data
+ *  source (analytics.pitcher_arsenal + league_pitch_summary) is RLS-locked
+ *  to the authenticated role. Guests and anonymous viewers see a sign-up
+ *  prompt; signed-in viewers will see the visualizations (TBD next pass —
+ *  currently a placeholder so we can verify the auth gate end-to-end). */
+function PitchesTab({ personId }: { personId: number }) {
+  const state = useUserState();
+
+  // Show a loader while the auth probe is in flight rather than flashing
+  // the sign-up prompt at an authenticated user during the brief loading
+  // window.
+  if (state.status === "loading") {
+    return (
+      <div className="px-3.5 md:px-6 pt-3.5 pb-20">
+        <Loader />
+      </div>
+    );
+  }
+
+  if (state.status !== "authenticated") {
+    return <PitchesSignUpPrompt personId={personId} />;
+  }
+
+  return <PitchArsenalChart personId={personId} />;
+}
+
+function PitchesSignUpPrompt({ personId }: { personId: number }) {
+  // Round-trip the user back to this exact player after they auth, via the
+  // `?redirect=` param the /login page validates and honors.
+  const redirect = `/login?redirect=${encodeURIComponent(`/player/${personId}`)}`;
+  return (
+    <div className="px-3.5 md:px-6 pt-3.5 pb-20">
+      <div
+        data-cy="pitches-signup-prompt"
+        className="bg-surface border border-line rounded-[14px] p-6 flex flex-col items-center text-center gap-3"
+      >
+        <div className="font-head text-[18px] font-bold text-ink tracking-[-0.3px]">
+          Pitch analytics is members-only
+        </div>
+        <div className="font-ui text-[13px] text-ink-2 leading-snug max-w-[300px]">
+          Sign up for a free account to see arsenal breakdowns and how this
+          pitcher stacks up against the league.
+        </div>
+        <Link
+          href={redirect}
+          data-cy="pitches-signup-cta"
+          className="mt-1 inline-block px-5 py-2.5 bg-accent text-white rounded-[14px] font-head text-[14px] font-semibold tracking-[-0.2px] no-underline"
+        >
+          Sign up
+        </Link>
+        <div className="font-ui text-[11px] text-ink-3">
+          Already have an account?{" "}
+          <Link
+            href={redirect}
+            data-cy="pitches-signin-link"
+            className="text-accent font-semibold"
+          >
+            Sign in
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Gamelog tab ──────────────────────────────────────────────── */
 
 function GamelogTab({ personId, mode }: { personId: number; mode: StatMode }) {
@@ -729,7 +836,7 @@ function HistoryTab({ personId, mode }: { personId: number; mode: StatMode }) {
   // a single-digit value most of the time, so we fix it at 40px (matching the
   // Tm column) — that frees the remaining five 1fr columns to widen, giving
   // ERA, IP, K, and WHIP enough room to not visually collide with neighbors.
-  const hitterCols = "48px 40px 1fr 1fr 1fr 1fr 1fr 1fr";
+  const hitterCols = "48px 25px 1fr 1fr 1fr 1fr 1fr 1fr";
   const pitcherCols = "48px 25px 25px 25px 1fr 1fr 1fr 1fr";
 
   return (
