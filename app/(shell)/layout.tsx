@@ -237,6 +237,13 @@ export default function ShellLayout({ children }: { children: React.ReactNode })
 
           <main
             className={`relative flex-1 min-h-0 ${isTabRoute ? "pb-[calc(env(safe-area-inset-bottom,0)+76px)] md:pb-0" : ""}`}
+            // Pin <main> to its own GPU compositor layer. Detail screens
+            // (GameDetail/PlayerDetail/TeamDetail) render as position:absolute
+            // overlays which iOS Safari promotes to a separate layer; on back
+            // navigation, the parent layer's bitmap isn't always invalidated,
+            // leaving a blank canvas until a touch/scroll forces a repaint.
+            // Keeping main on its own stable layer sidesteps the invalidation gap.
+            style={{ transform: "translateZ(0)" }}
           >
             {children}
           </main>
