@@ -9,16 +9,18 @@
  * `analytics`. Without it the `.schema('analytics')` call returns a 404 from
  * PostgREST and these functions throw.
  *
- * RLS is currently OFF on these tables; rows are returned to anyone with the
- * anon key. The data is already-public MLB stats, but if any user-scoped
- * tables get added under `analytics/` the schema-exposure decision should be
- * revisited.
+ * RLS is enabled on these tables with a `SELECT TO authenticated` policy, so
+ * only signed-in requests return rows; the anon role is blocked at both the
+ * schema grant and the policy. Route handlers that call these fetchers should
+ * gate on auth themselves so anonymous callers get a clear 401 rather than a
+ * silently-empty result set.
  */
 
 import { createClient } from "@/lib/supabase/server";
 import type {
   LeaguePitchSummaryRow,
   PitcherArsenalRow,
+  PlayerBattingPercentilesRow,
   PlayerRollingStatsRow,
 } from "@/lib/analytics/types";
 
@@ -39,6 +41,28 @@ export async function getLeaguePitchSummary(opts: {
   const { data, error } = await q.order("n_pitches", { ascending: false });
   if (error) throw new Error(`league_pitch_summary: ${error.message}`);
   return (data ?? []) as LeaguePitchSummaryRow[];
+}
+
+/** Per-player batting percentile ranks. `playerId` is required — the table is
+ *  keyed on (player_id, season), so passing a `season` returns at most one
+ *  row; omit it to retrieve every season the ETL has written (newest first).
+ *  Returns an empty array for a player below the ETL's PA cutoff — they have
+ *  no row, which the caller should surface as "not enough plate appearances"
+ *  rather than an error. */
+export async function getPlayerBattingPercentiles(opts: {
+  playerId: number;
+  season?: number;
+}): Promise<PlayerBattingPercentilesRow[]> {
+  const supabase = await createClient();
+  let q = supabase
+    .schema("analytics")
+    .from("player_batting_percentiles")
+    .select("*")
+    .eq("player_id", opts.playerId);
+  if (opts.season !== undefined) q = q.eq("season", opts.season);
+  const { data, error } = await q.order("season", { ascending: false });
+  if (error) throw new Error(`player_batting_percentiles: ${error.message}`);
+  return (data ?? []) as PlayerBattingPercentilesRow[];
 }
 
 /** Per-pitcher arsenal. Pass a single `pitcherId` for one pitcher, or

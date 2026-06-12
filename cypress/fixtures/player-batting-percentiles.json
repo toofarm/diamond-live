@@ -1,0 +1,25 @@
+{
+  "season": 2026,
+  "row": {
+    "player_id": 596019,
+    "player_name": "Francisco Lindor",
+    "season": 2026,
+    "bat_plate_appearances": 175,
+    "bat_avg": 0.318,
+    "bat_avg_pctl": 92.4,
+    "bat_obp": 0.403,
+    "bat_obp_pctl": 95.1,
+    "bat_slg": 0.571,
+    "bat_slg_pctl": 97.3,
+    "bat_ops": 0.974,
+    "bat_ops_pctl": 96.5,
+    "bat_k_pct": 18.5,
+    "bat_k_pct_pctl": 60.2,
+    "bat_bb_pct": 10.5,
+    "bat_bb_pct_pctl": 64.8,
+    "bat_babip": 0.264,
+    "bat_babip_pctl": 26.1,
+    "bat_wrc_plus": null,
+    "bat_wrc_plus_pctl": 100.0
+  }
+}

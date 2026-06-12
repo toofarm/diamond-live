@@ -30,6 +30,41 @@ export interface LeaguePitchSummaryRow {
   pct_home_run: number;
 }
 
+/** One row per (player, season) — a qualified batter's rate stats paired
+ *  with their percentile rank across the qualified-batter population. Only
+ *  batters above the ETL's PA cutoff appear, so a non-qualifying player has
+ *  no row at all (the v. League tab treats that as "not enough PAs").
+ *
+ *  Each `*_pctl` is a 0–100 rank where higher always reads as better — the
+ *  ETL already inverts strikeout rate, so a low `bat_k_pct` maps to a high
+ *  `bat_k_pct_pctl`. Visualization code can colour every percentile the same
+ *  cool→warm way without per-stat direction handling. */
+export interface PlayerBattingPercentilesRow {
+  player_id: number;
+  player_name: string;
+  season: number;
+  bat_plate_appearances: number;
+  bat_avg: number;
+  bat_avg_pctl: number;
+  bat_obp: number;
+  bat_obp_pctl: number;
+  bat_slg: number;
+  bat_slg_pctl: number;
+  bat_ops: number;
+  bat_ops_pctl: number;
+  bat_k_pct: number;
+  bat_k_pct_pctl: number;
+  bat_bb_pct: number;
+  bat_bb_pct_pctl: number;
+  bat_babip: number;
+  bat_babip_pctl: number;
+  // wRC+ landed in the table but its value is still null pending the ETL's
+  // park/league adjustment; the percentile is a placeholder until then, so the
+  // v. League tab intentionally doesn't surface it yet.
+  bat_wrc_plus: number | null;
+  bat_wrc_plus_pctl: number;
+}
+
 /** One row per (pitcher, season, pitch_type). `usage_pct` is share-of-arsenal,
  *  not share-of-league — compare against `LeaguePitchSummaryRow.pct_of_league_mix`
  *  for "this pitcher throws X more than average". */

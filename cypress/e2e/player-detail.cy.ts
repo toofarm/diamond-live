@@ -29,13 +29,20 @@ describe("/player/[id]", () => {
     cy.get('[data-cy="headline-tile"]').should("have.length", 4);
   });
 
-  it("click Splits sub-tab → splits rows render with vR / vL labels", () => {
-    cy.get('[data-cy="sub-tab"][data-cy-tab="splits"]').click();
+  it("Season tab → splits section renders inline with vR / vL labels", () => {
+    // Splits used to be their own sub-tab; they now appear as a sibling
+    // section inside the Season tab. The /splits endpoint is fetched on
+    // first paint of the Season tab. The section sits below the Batting
+    // card, so on the 402×874 mobile viewport the rows land below the
+    // fold — assert via `exist`, not `be.visible`.
     cy.wait("@splits");
+    cy.get('[data-cy="splits-section"]').should("exist");
     cy.get('[data-cy="splits-row"]').should("have.length", 7);
-    cy.contains("vs RHP").should("be.visible");
-    cy.contains("vs LHP").should("be.visible");
-    cy.contains("RISP").should("be.visible");
+    cy.contains("vs RHP").should("exist");
+    cy.contains("vs LHP").should("exist");
+    // The dedicated Splits sub-tab is gone — replaced by the v. League tab.
+    cy.get('[data-cy="sub-tab"][data-cy-tab="splits"]').should("not.exist");
+    cy.get('[data-cy="sub-tab"][data-cy-tab="vsleague"]').should("exist");
   });
 
   it("click Gamelog sub-tab → gamelog rows render in hitter columns", () => {
@@ -113,6 +120,68 @@ describe("/player/[id]", () => {
       cy.wait("@player");
       cy.wait("@compare");
       cy.get('[data-cy="stat-compare-value"]').should("exist");
+    });
+  });
+
+  // Rewritten 2026-06-12: the v. League tab now renders percentile sliders
+  // backed by analytics.player_batting_percentiles (one per rate category —
+  // AVG, OBP, SLG, OPS, BB%, K%, BABIP) instead of the old league-average
+  // delta bars. wRC+ is in the table but still null, so it isn't surfaced.
+  // Lindor (596019) is the focal hitter; player-batting-percentiles.json
+  // supplies a row whose ranks span hot (SLG 97th) to cool (BABIP 26th).
+  context("v. League sub-tab", () => {
+    beforeEach(() => {
+      cy.intercept("GET", "/api/analytics/player-batting-percentiles/596019*", {
+        fixture: "player-batting-percentiles.json",
+      }).as("percentiles");
+    });
+
+    it("guest views v. League tab → sign-up CTA shows and the percentile endpoint is never fetched", () => {
+      cy.get('[data-cy="sub-tab"][data-cy-tab="vsleague"]').click();
+      cy.get('[data-cy="vsleague-signup-prompt"]').should("be.visible");
+      cy.get('[data-cy="vsleague-signup-cta"]')
+        .should("have.attr", "href")
+        .and("include", "/login?redirect=");
+      cy.get('[data-cy="vsleague-signin-link"]').should("be.visible");
+      // Auth gate at the component too — no percentile fetch should fire.
+      cy.get('[data-cy="vsleague-chart"]').should("not.exist");
+      cy.get("@percentiles.all").should("have.length", 0);
+    });
+
+    it("authenticated viewer opens ?tab=vsleague → one percentile slider renders per rate category", () => {
+      cy.visitAsAuthenticatedUser("/player/596019?tab=vsleague");
+      cy.wait("@player");
+      cy.wait("@percentiles");
+
+      cy.get('[data-cy="vsleague-chart"]').should("be.visible");
+
+      // Seven categories in the fixture: AVG, OBP, SLG, OPS, BB%, K%, BABIP.
+      // wRC+ is present in the row but null, so it must not render a slider.
+      cy.get('[data-cy="percentile-row"]').should("have.length", 7);
+      cy.get('[data-cy="percentile-row"][data-cy-stat="wrc_plus"]').should("not.exist");
+
+      // AVG row: raw .318 with a 92nd-percentile rank.
+      const avg = () => cy.get('[data-cy="percentile-row"][data-cy-stat="avg"]');
+      avg().find('[data-cy="percentile-value"]').should("contain", "318");
+      avg().find('[data-cy="percentile-rank"]').should("contain", "92nd");
+
+      // K% row: raw 18.5% with a 60th-percentile rank.
+      const k = () => cy.get('[data-cy="percentile-row"][data-cy-stat="k_pct"]');
+      k().find('[data-cy="percentile-value"]').should("contain", "18.5%");
+      k().find('[data-cy="percentile-rank"]').should("contain", "60th");
+
+      // BB% row: raw 10.5% with a 65th-percentile rank.
+      const bb = () => cy.get('[data-cy="percentile-row"][data-cy-stat="bb_pct"]');
+      bb().find('[data-cy="percentile-value"]').should("contain", "10.5%");
+      bb().find('[data-cy="percentile-rank"]').should("contain", "65th");
+
+      // BABIP row: raw .264 with a cool 26th-percentile rank.
+      const babip = () => cy.get('[data-cy="percentile-row"][data-cy-stat="babip"]');
+      babip().find('[data-cy="percentile-value"]').should("contain", "264");
+      babip().find('[data-cy="percentile-rank"]').should("contain", "26th");
+
+      // Sign-up prompt must not coexist with the chart.
+      cy.get('[data-cy="vsleague-signup-prompt"]').should("not.exist");
     });
   });
 });

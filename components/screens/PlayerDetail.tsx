@@ -12,6 +12,7 @@ import type {
   PlayerSplitRow,
   StatMode,
 } from "@/lib/mlb/types";
+import type { PlayerBattingPercentilesRow } from "@/lib/analytics/types";
 import { TEAMS, type Team } from "@/lib/mlb/teams";
 import { BackChevron, Loader, TeamBadge } from "@/components/ui/primitives";
 import { ComparePicker, type CompareItem } from "@/components/ui/ComparePicker";
@@ -21,22 +22,31 @@ import { useCompareParam } from "@/lib/mlb/useCompareParam";
 import { pickWinner } from "@/lib/mlb/statDirection";
 import { useUserState } from "@/lib/storage";
 import { PitchArsenalChart } from "@/components/charts/PitchArsenalChart";
+import {
+  PERCENTILE_CATEGORIES,
+  percentileColor,
+  formatPercentileRank,
+} from "@/lib/analytics/battingPercentiles";
 import { sendToDataLayer, events } from "@/lib/analytics";
 
-type SubTab = "season" | "splits" | "pitches" | "gamelog" | "history";
+type SubTab = "season" | "vsleague" | "pitches" | "gamelog" | "history";
 
 // Union of every tab id we'll accept from the URL. Per-mode tab lists below
 // gate which ones actually render; an off-mode tab (e.g. ?tab=pitches for a
 // hitter) is caught by the validation effect and reset to "season".
-const ALL_TABS: readonly SubTab[] = ["season", "splits", "pitches", "gamelog", "history"];
+const ALL_TABS: readonly SubTab[] = ["season", "vsleague", "pitches", "gamelog", "history"];
 
-// Tabs diverge by mode: hitters get the Splits tab, pitchers get the
+// Tabs diverge by mode: hitters get the v. League tab, pitchers get the
 // Pitches tab in the same slot. Everything else (Season, Gamelog, History)
 // is shared. Kept as two separate constants rather than a function so the
 // labels can be computed once at module load.
+//
+// The hitter Season tab also houses the situational-splits table — what was
+// previously its own "Splits" sub-tab. The dedicated batter-vs-league
+// visualization lives under the "vsleague" id.
 const TABS_HITTER: { id: SubTab; label: string }[] = [
   { id: "season", label: `${currentSeason()} Season` },
-  { id: "splits", label: "Splits" },
+  { id: "vsleague", label: "v. League" },
   { id: "gamelog", label: "Gamelog" },
   { id: "history", label: "History" },
 ];
@@ -186,7 +196,7 @@ export function PlayerDetail({
       <div className="flex-1 overflow-y-auto w-full max-w-200 mx-auto">
         {error && <div className="p-6 text-neg">Failed to load player.</div>}
         {data && tab === "season" && <SeasonTab data={data} />}
-        {data && tab === "splits" && mode === "hitting" && <SplitsTab personId={personId} mode={mode} />}
+        {data && tab === "vsleague" && mode === "hitting" && <VsLeagueTab personId={personId} data={data} />}
         {data && tab === "pitches" && mode === "pitching" && <PitchesTab personId={personId} />}
         {data && tab === "gamelog" && <GamelogTab personId={personId} mode={mode} />}
         {data && tab === "history" && <HistoryTab personId={personId} mode={mode} />}
@@ -445,6 +455,13 @@ function SeasonTab({ data }: { data: PlayerDetailData }) {
         </StatSection>
       )}
 
+      {/* Situational splits. Used to live on its own sub-tab; folded into
+          Season so the v. League tab can take that slot. Hitters only —
+          pitcher splits have never been surfaced. */}
+      {mode === "hitting" && hasHitting && (
+        <SplitsSection personId={data.id} mode={mode} />
+      )}
+
       {!hasHitting && !hasPitching && (
         <div className="mt-6 p-6 text-center text-ink-3 bg-surface border border-line rounded-[14px]">
           No season stats available for this player yet.
@@ -579,9 +596,18 @@ function StatValue({ value }: { value: string | number | undefined }) {
   return <>{s}</>;
 }
 
-/* ── Splits tab ───────────────────────────────────────────────── */
+/* ── Splits section (embedded in SeasonTab) ──────────────────────
+ *
+ * Previously a top-level sub-tab; folded into the Season tab when the
+ * batter-vs-league visualization took the "Splits" sub-tab slot. Renders
+ * without the outer padding wrapper SeasonTab already provides.
+ *
+ * The same component still serves pitcher splits via the `mode` prop, but
+ * the Season tab only mounts it for hitters — pitcher splits have never
+ * been surfaced.
+ * ──────────────────────────────────────────────────────────────── */
 
-function SplitsTab({ personId, mode }: { personId: number; mode: StatMode }) {
+function SplitsSection({ personId, mode }: { personId: number; mode: StatMode }) {
   const { data, loading, error } = useApi<{ season: number; mode: StatMode; splits: PlayerSplitRow[] }>(
     `/api/mlb/player/${personId}/splits?group=${mode}`,
     { cacheMs: 300_000 },
@@ -592,25 +618,33 @@ function SplitsTab({ personId, mode }: { personId: number; mode: StatMode }) {
   const valA = (r: PlayerSplitRow) => (mode === "pitching" ? r.era : r.avg);
   const valB = (r: PlayerSplitRow) => (mode === "pitching" ? r.whip : r.ops);
 
+  // When there are zero splits and no error, render nothing rather than a
+  // placeholder card. The Season tab already has its main content; an empty
+  // "No splits" card would just be noise.
+  if (!loading && !error && rows.length === 0) return null;
+
   return (
-    <div className="px-3.5 md:px-6 pt-3.5 pb-20">
+    <div data-cy="splits-section" className="mt-5">
       {loading && <Loader />}
       {error && <div className="p-6 text-neg">Failed to load splits.</div>}
-      {!loading && rows.length === 0 && !error && (
-        <div className="p-6 text-center text-ink-3 bg-surface border border-line rounded-[14px]">
-          No splits available for this season yet.
-        </div>
-      )}
       {rows.length > 0 && (
-        <div className="bg-surface border border-line rounded-[14px] relative">
+        <div className="bg-surface border border-line rounded-[14px] overflow-hidden">
+          <div className="flex items-baseline gap-2 px-3.5 md:px-4 py-3 border-b border-line-2">
+            <div className="font-ui text-[11px] font-bold tracking-[1.4px] uppercase text-ink">
+              Splits
+            </div>
+            <div className="flex-1" />
+            <div className="font-mono text-[11px] text-ink-3 tracking-[0.4px]">
+              {`${currentSeason()} Season`}
+            </div>
+          </div>
           <div
-            className="grid items-center px-3.5 md:px-4 py-3 font-ui text-[10px] font-bold tracking-[1.2px] uppercase text-ink-3 border-b border-line-2
-            md:relative sticky top-0 bg-surface z-5000"
+            className="grid items-center px-3.5 md:px-4 py-2.5 font-ui text-[10px] font-bold tracking-[1.2px] uppercase text-ink-3 border-b border-line-2"
             style={{ gridTemplateColumns: "1fr 60px 60px" }}
           >
-            <div className="bg-surface">Split</div>
-            <div className="text-right bg-surface">{colA}</div>
-            <div className="text-right bg-surface">{colB}</div>
+            <div>Split</div>
+            <div className="text-right">{colA}</div>
+            <div className="text-right">{colB}</div>
           </div>
           {rows.map((r, i) => (
             <div
@@ -631,6 +665,246 @@ function SplitsTab({ personId, mode }: { personId: number; mode: StatMode }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ── v. League tab ────────────────────────────────────────────────
+ *
+ * Hitter-only sub-tab. Renders one slider per rate category the
+ * percentile ETL ranks (`analytics.player_batting_percentiles`: AVG, OBP,
+ * SLG, OPS, K%). Each slider fills from 0 to the player's percentile and
+ * is coloured on a cool→warm ramp — a cool fill is a low rank, a hot fill
+ * is elite — with the raw value and ordinal rank ("99th") alongside.
+ *
+ * The percentile table only carries qualified batters, so a player below
+ * the ETL's plate-appearance cutoff has no row; that surfaces as a
+ * "not enough plate appearances" card rather than an empty chart.
+ *
+ * Auth: the underlying route is auth-gated, so guests and anonymous
+ * viewers see a sign-up CTA rather than the chart (mirrors PitchesTab).
+ * ──────────────────────────────────────────────────────────────── */
+
+function VsLeagueTab({ personId, data }: { personId: number; data: PlayerDetailData }) {
+  const state = useUserState();
+
+  if (state.status === "loading") {
+    return (
+      <div className="px-3.5 md:px-6 pt-3.5 pb-20">
+        <Loader />
+      </div>
+    );
+  }
+
+  if (state.status !== "authenticated") {
+    return <VsLeagueSignUpPrompt personId={personId} />;
+  }
+
+  return <VsLeagueChart data={data} />;
+}
+
+function VsLeagueSignUpPrompt({ personId }: { personId: number }) {
+  const redirect = `/login?redirect=${encodeURIComponent(`/player/${personId}?tab=vsleague`)}`;
+  return (
+    <div className="px-3.5 md:px-6 pt-3.5 pb-20">
+      <div
+        data-cy="vsleague-signup-prompt"
+        className="bg-surface border border-line rounded-[14px] p-6 flex flex-col items-center text-center gap-3"
+      >
+        <div className="font-head text-[18px] font-bold text-ink tracking-[-0.3px]">
+          League comparisons are members-only
+        </div>
+        <div className="font-ui text-[13px] text-ink-2 leading-snug max-w-75">
+          Sign up for a free account to see how this hitter stacks up against
+          the league average.
+        </div>
+        <Link
+          href={redirect}
+          data-cy="vsleague-signup-cta"
+          className="mt-1 inline-block px-5 py-2.5 bg-accent text-white rounded-[14px] font-head text-[14px] font-semibold tracking-[-0.2px] no-underline"
+        >
+          Sign up
+        </Link>
+        <div className="font-ui text-[11px] text-ink-3">
+          Already have an account?{" "}
+          <Link
+            href={redirect}
+            data-cy="vsleague-signin-link"
+            className="text-accent font-semibold"
+          >
+            Sign in
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface PercentileRowData {
+  key: string;
+  label: string;
+  /** Raw value already formatted for display (".347", "23.2%"). */
+  valueDisplay: string;
+  /** 0–100 percentile rank. */
+  pctl: number;
+}
+
+function VsLeagueChart({ data }: { data: PlayerDetailData }) {
+  const { data: resp, loading, error } = useApi<{
+    season: number;
+    row: PlayerBattingPercentilesRow | null;
+  }>(`/api/analytics/player-batting-percentiles/${data.id}`, { cacheMs: 600_000 });
+
+  // Project the percentile row onto the ordered category list, dropping any
+  // category whose value or percentile is missing (defensive — the ETL writes
+  // all five together, but a partial row shouldn't render a broken slider).
+  const rows: PercentileRowData[] = useMemo(() => {
+    const row = resp?.row;
+    if (!row) return [];
+    const out: PercentileRowData[] = [];
+    for (const cat of PERCENTILE_CATEGORIES) {
+      const value = row[cat.valueKey];
+      const pctl = row[cat.pctlKey];
+      if (value === null || value === undefined || pctl === null || pctl === undefined) continue;
+      out.push({
+        key: cat.key,
+        label: cat.label,
+        valueDisplay: cat.format(Number(value)),
+        pctl: Number(pctl),
+      });
+    }
+    return out;
+  }, [resp?.row]);
+
+  if (loading && !resp) {
+    return (
+      <div className="px-3.5 md:px-6 pt-3.5 pb-20">
+        <Loader />
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="px-3.5 md:px-6 pt-3.5 pb-20">
+        <div className="p-6 text-neg">Failed to load league percentiles.</div>
+      </div>
+    );
+  }
+  // No row, or a row with no usable categories → the player didn't qualify.
+  if (rows.length === 0) {
+    return (
+      <div className="px-3.5 md:px-6 pt-3.5 pb-20">
+        <div
+          data-cy="vsleague-empty"
+          className="p-6 text-center text-ink-3 bg-surface border border-line rounded-[14px]"
+        >
+          Not enough plate appearances yet to rank this hitter against the league.
+        </div>
+      </div>
+    );
+  }
+
+  const playerLastName = data.fullName.trim().split(/\s+/).slice(-1)[0];
+
+  return (
+    <div className="px-3.5 md:px-6 pt-3.5 pb-20">
+      <div
+        data-cy="vsleague-chart"
+        className="bg-surface border border-line rounded-[14px] overflow-hidden"
+      >
+        <div className="flex items-baseline gap-2 px-3.5 md:px-4 py-3 border-b border-line-2">
+          <div className="font-ui text-[11px] font-bold tracking-[1.4px] uppercase text-ink">
+            {playerLastName} · Percentile Rankings
+          </div>
+          <div className="flex-1" />
+          <div className="font-mono text-[11px] text-ink-3 tracking-[0.4px]">
+            {`${currentSeason()} Season`}
+          </div>
+        </div>
+
+        {/* Column header — value, slider track, rank. */}
+        <div
+          className="grid items-baseline px-3.5 md:px-4 pt-3 pb-1.5"
+          style={{ gridTemplateColumns: VSLEAGUE_COLS }}
+        >
+          <div className="font-ui text-[10px] font-bold tracking-[1.2px] uppercase text-ink-3" />
+          <div className="font-mono text-[10px] font-bold tracking-[0.8px] uppercase text-ink-3 text-right">
+            {playerLastName}
+          </div>
+          <div />
+          <div className="font-mono text-[10px] font-bold tracking-[0.8px] uppercase text-ink-3 text-right">
+            Rank
+          </div>
+        </div>
+
+        {rows.map((r, i) => (
+          <PercentileRow key={r.key} row={r} last={i === rows.length - 1} />
+        ))}
+
+        <div className="px-3.5 md:px-4 py-2 border-t border-line-2 flex items-center justify-between font-mono text-[10px] text-ink-3 tracking-[0.4px] uppercase">
+          <span>← Cooler · lower rank</span>
+          <span>Higher rank · warmer →</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Column track for every percentile row: label · value · slider · rank.
+// Defined once so the header and per-row grids stay aligned.
+const VSLEAGUE_COLS = "64px 48px 1fr 44px";
+
+function PercentileRow({ row, last }: { row: PercentileRowData; last: boolean }) {
+  const color = percentileColor(row.pctl);
+  // Clamp the marker into [0, 100] so a stray rounding overshoot can't push
+  // the dot outside the track.
+  const pos = Math.max(0, Math.min(100, row.pctl));
+
+  return (
+    <div
+      data-cy="percentile-row"
+      data-cy-stat={row.key}
+      className={`grid items-center px-3.5 md:px-4 py-2.5 ${last ? "" : "border-b border-line-2"}`}
+      style={{ gridTemplateColumns: VSLEAGUE_COLS }}
+    >
+      <div className="font-ui text-[13px] text-ink">{row.label}</div>
+      <div
+        data-cy="percentile-value"
+        className="font-mono text-[13px] font-semibold text-ink text-right"
+      >
+        <StatValue value={row.valueDisplay} />
+      </div>
+      <div
+        data-cy="percentile-bar"
+        title={`${row.label}: ${formatPercentileRank(row.pctl)} percentile`}
+        className="relative h-3.5 mx-2 bg-chip rounded-full overflow-hidden"
+      >
+        {/* Fill from 0 → percentile, coloured cool→warm by rank. */}
+        <div
+          className="absolute left-0 top-0 bottom-0 rounded-full"
+          style={{
+            width: `${pos}%`,
+            background: color,
+            transition: "width 300ms ease-out, background 300ms ease-out",
+          }}
+          aria-label={`${formatPercentileRank(row.pctl)} percentile`}
+        />
+        {/* Marker dot at the percentile position. */}
+        <div
+          className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white shadow-sm"
+          style={{
+            left: `${pos}%`,
+            background: color,
+            transition: "left 300ms ease-out, background 300ms ease-out",
+          }}
+        />
+      </div>
+      <div
+        data-cy="percentile-rank"
+        className="font-mono text-[12px] font-semibold tracking-[-0.2px] text-right text-ink"
+      >
+        {formatPercentileRank(row.pctl)}
+      </div>
     </div>
   );
 }
