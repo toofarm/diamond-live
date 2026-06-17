@@ -1,0 +1,32 @@
+[
+  {
+    "entity_type": "team",
+    "uid": 147,
+    "display_name": "New York Yankees",
+    "position_name": null,
+    "team_id": 147,
+    "team_name": "New York Yankees",
+    "team_abbreviation": "NYY",
+    "score": 0.86
+  },
+  {
+    "entity_type": "team",
+    "uid": 109,
+    "display_name": "Arizona Diamondbacks",
+    "position_name": null,
+    "team_id": 109,
+    "team_name": "Arizona Diamondbacks",
+    "team_abbreviation": "AZ",
+    "score": 0.7
+  },
+  {
+    "entity_type": "player",
+    "uid": 592450,
+    "display_name": "Aaron Judge",
+    "position_name": "Outfielder",
+    "team_id": 147,
+    "team_name": "New York Yankees",
+    "team_abbreviation": "NYY",
+    "score": 0.8
+  }
+]
