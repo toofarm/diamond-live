@@ -271,6 +271,8 @@ export function TopBar({
             return (
               <button
                 key={t.id}
+                data-cy="nav-tab"
+                data-cy-tab={t.id}
                 onClick={() => onChange(t.id)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border-none cursor-pointer font-ui text-[13px] font-semibold transition-colors ${active ? "bg-chip text-ink" : "bg-transparent text-ink-2 hover:bg-chip hover:text-ink"
                   }`}
@@ -394,6 +396,8 @@ export function TabBar({
         return (
           <button
             key={t.id}
+            data-cy="nav-tab"
+            data-cy-tab={t.id}
             onClick={() => onChange(t.id)}
             className={`flex flex-col items-center gap-0.5 px-2.5 py-1.5 bg-transparent border-none cursor-pointer font-ui rounded-sm active:bg-active ${active ? "text-accent" : "text-ink-2"
               }`}

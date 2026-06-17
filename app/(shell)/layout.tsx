@@ -15,20 +15,32 @@ import {
   type UserProfile,
 } from "@/lib/storage";
 import { TabBar, TopBar } from "@/components/ui/primitives";
-import { IconScores, IconStandings, IconSchedule, IconLeaders, IconSettings } from "@/components/ui/icons";
+import { IconScores, IconStandings, IconSchedule, IconLeaders, IconSettings, IconSearch } from "@/components/ui/icons";
+import { SEARCH_INPUT_ID } from "@/components/screens/SearchScreen";
 import { Onboarding } from "@/components/onboarding/Onboarding";
 import { GuestNudgeBanner } from "@/components/auth/GuestNudgeBanner";
 import { ShellContext, type ShellState } from "@/lib/shell";
 import { useGameNotifications, usePermissionState } from "@/lib/notifications";
 
+// Desktop top-bar nav: Search sits second, Settings stays (the user badge also
+// routes there). The mobile tab bar (below) drops Settings — it's reachable via
+// the badge — so Search lands in the second slot there too.
 const TABS = [
   { id: "scores", label: "Scores", icon: IconScores },
+  { id: "search", label: "Search", icon: IconSearch },
   { id: "standings", label: "Standings", icon: IconStandings },
   { id: "schedule", label: "Schedule", icon: IconSchedule },
   { id: "leaders", label: "Leaders", icon: IconLeaders },
   { id: "settings", label: "Settings", icon: IconSettings },
 ];
 
+// Mobile bottom bar omits Settings (popped off per design — still reachable from
+// the profile badge), which leaves Search in the second position.
+const MOBILE_TABS = TABS.filter((t) => t.id !== "settings");
+
+// Route ids that count as top-level tabs (drives TabBar visibility + active
+// highlighting). Derived from the full TABS list so /search and /settings both
+// register as tab routes even though the mobile bar hides Settings.
 const TAB_IDS = new Set(TABS.map((t) => t.id));
 
 function deriveTab(pathname: string): string | null {
@@ -219,6 +231,19 @@ export default function ShellLayout({ children }: { children: React.ReactNode })
 
   const userName = user?.name ?? "Guest";
 
+  // Navigate to a top-level tab. Tapping Search also pulls focus into the search
+  // input. On a cross-route nav the SearchScreen autofocuses on mount, so this
+  // rAF (element not yet mounted → no-op) only matters when Search is tapped
+  // while already on /search, where there's no remount to trigger autofocus.
+  const navigate = (id: string) => {
+    router.push(`/${id}`);
+    if (id === "search") {
+      requestAnimationFrame(() => {
+        document.getElementById(SEARCH_INPUT_ID)?.focus();
+      });
+    }
+  };
+
   const shellState: ShellState = { user, persist, toggleFollow, openManage, resetOnboarding };
 
   return (
@@ -228,7 +253,7 @@ export default function ShellLayout({ children }: { children: React.ReactNode })
           <TopBar
             tabs={TABS}
             current={tab ?? ""}
-            onChange={(id) => router.push(`/${id}`)}
+            onChange={navigate}
             userName={userName}
             onProfile={() => router.push("/settings")}
           />
@@ -250,9 +275,9 @@ export default function ShellLayout({ children }: { children: React.ReactNode })
 
           {isTabRoute && !onboardingOpen && (
             <TabBar
-              tabs={TABS}
+              tabs={MOBILE_TABS}
               current={tab!}
-              onChange={(id) => router.push(`/${id}`)}
+              onChange={navigate}
               hidden={navHidden}
             />
           )}
