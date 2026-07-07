@@ -13,6 +13,7 @@ export function ScoreCard({
 }) {
   const isLive = game.status === "LIVE";
   const isFinal = game.status === "FINAL";
+  const isPostponed = game.status === "POSTPONED";
   const awayWon = isFinal && (game.awayScore ?? 0) > (game.homeScore ?? 0);
   const homeWon = isFinal && (game.homeScore ?? 0) > (game.awayScore ?? 0);
 
@@ -67,6 +68,13 @@ export function ScoreCard({
             className="text-[11px] font-bold text-ink-2 tracking-widest uppercase"
           >
             FINAL{game.inning && game.inning !== 9 ? ` / ${game.inning}` : ""}
+          </span>
+        ) : isPostponed ? (
+          <span
+            data-cy="score-card-status"
+            className="text-[11px] font-bold text-ink-3 tracking-widest uppercase"
+          >
+            Postponed
           </span>
         ) : (
           <span

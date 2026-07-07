@@ -85,8 +85,11 @@ function mapStatus(
   detailed?: string,
 ): GameSummary["status"] {
   if (abstract === "Live") return "LIVE";
-  if (abstract === "Final") return "FINAL";
+  // A postponed game reports abstractGameState "Final" with detailedState
+  // "Postponed", so this check MUST precede the Final branch — otherwise a
+  // rained-out game is miscategorized as a completed game.
   if (detailed && /postponed/i.test(detailed)) return "POSTPONED";
+  if (abstract === "Final") return "FINAL";
   return "SCHEDULED";
 }
 

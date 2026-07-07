@@ -44,7 +44,7 @@ describe("/scores", () => {
       });
   });
 
-  it("render games of mixed status → LIVE, FINAL, and SCHEDULED copy each appear on at least one card", () => {
+  it("render games of mixed status → LIVE, FINAL, SCHEDULED, and POSTPONED copy each appear on at least one card", () => {
     cy.get('[data-cy="score-card-status"]')
       .filter(':contains("LIVE")')
       .should("have.length.at.least", 1);
@@ -55,6 +55,20 @@ describe("/scores", () => {
     cy.get('[data-cy="score-card-status"]')
       .filter(":contains(':')")
       .should("have.length.at.least", 1);
+    // Postponed games (fixture id=5) surface a "Postponed" label.
+    cy.get('[data-cy="score-card-status"]')
+      .filter(':contains("Postponed")')
+      .should("have.length.at.least", 1);
+  });
+
+  // Added by Cypress Author on 2026-07-07.
+  it("view a postponed game → card reads 'Postponed', never 'FINAL'", () => {
+    // Fixture id=5 (CHC @ STL) is POSTPONED. A rained-out game must not be
+    // miscategorized as a completed (FINAL) game.
+    cy.get('[data-cy="score-card"][data-cy-game-id="5"]')
+      .find('[data-cy="score-card-status"]')
+      .should("contain", "Postponed")
+      .and("not.contain", "FINAL");
   });
 
   // Added by Cypress Author on 2026-07-07.
