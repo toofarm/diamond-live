@@ -57,6 +57,26 @@ describe("/scores", () => {
       .should("have.length.at.least", 1);
   });
 
+  // Added by Cypress Author on 2026-07-07.
+  it("view a completed game → card credits the winning and losing pitcher, not probables", () => {
+    // Fixture id=2 (NYM @ ATL) is FINAL with decisions posted
+    // (W: Spencer Strider / L: Kodai Senga). NYM is followed, so the card
+    // renders in the Following section.
+    cy.get('[data-cy="score-card"][data-cy-game-id="2"]').within(() => {
+      cy.get('[data-cy="score-card-status"]').should("contain", "FINAL");
+      // The W/L decisions strip replaces the probable-starters line.
+      cy.get('[data-cy="score-card-decisions"]')
+        .should("exist")
+        .and(($el) => {
+          const text = $el.text();
+          expect(text).to.include("W: Spencer Strider");
+          expect(text).to.include("L: Kodai Senga");
+        });
+      // Probables must not render on a final game.
+      cy.get('[data-cy="score-card-probables"]').should("not.exist");
+    });
+  });
+
   it("click the MLB header toggle twice → games collapse, then re-expand", () => {
     cy.get('[data-cy="mlb-section"]').within(() => {
       cy.get('[data-cy="score-card"]').should("have.length.at.least", 1);

@@ -32,6 +32,10 @@
       "statusDetail": "Final",
       "dateISO": "2026-05-12",
       "inning": 9,
+      "decisions": {
+        "winner": { "id": 675911, "fullName": "Spencer Strider" },
+        "loser": { "id": 673540, "fullName": "Kodai Senga" }
+      },
       "venue": "Truist Park",
       "awayRecord": { "w": 22, "l": 17 },
       "homeRecord": { "w": 24, "l": 14 }

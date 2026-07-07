@@ -23,6 +23,9 @@ export interface GameSummary {
   strikes?: number;
 
   pitchers?: { away?: string; home?: string };
+  /** Scorer W/L/SV credits on a completed game. Populated only for FINAL games
+   *  (via the schedule `decisions` hydrate); absent for LIVE/SCHEDULED. */
+  decisions?: GameDecisions;
   broadcast?: string;
   venue?: string;
   weather?: string;

@@ -16,6 +16,14 @@ export function ScoreCard({
   const awayWon = isFinal && (game.awayScore ?? 0) > (game.homeScore ?? 0);
   const homeWon = isFinal && (game.homeScore ?? 0) > (game.awayScore ?? 0);
 
+  // Completed games credit the winning/losing pitcher; upcoming/live games
+  // list the probable starters. A final game whose decisions haven't posted
+  // yet (rare — suspended/rescored) simply shows neither.
+  const decisions = isFinal ? game.decisions : undefined;
+  const hasDecisions = !!(decisions && (decisions.winner || decisions.loser));
+  const hasProbables =
+    !isFinal && !!(game.pitchers && (game.pitchers.away || game.pitchers.home));
+
   const teamRow = (abbr: string, score: number | null, won: boolean, rec?: TeamRecord) => (
     <div
       className={`flex items-center gap-3 py-2 ${isFinal && !won ? "opacity-55" : ""}`}
@@ -79,14 +87,22 @@ export function ScoreCard({
       {teamRow(game.away, game.awayScore, awayWon, game.awayRecord)}
       <div className="h-px bg-line-2" />
       {teamRow(game.home, game.homeScore, homeWon, game.homeRecord)}
-      {(game.pitchers || game.broadcast) && (
+      {(hasDecisions || hasProbables || game.broadcast) && (
         <div className="mt-2.5 pt-2.5 border-t border-line-2 flex items-center gap-2 text-[11px] text-ink-3 font-mono">
-          {game.pitchers && (game.pitchers.away || game.pitchers.home) && (
-            <span>
-              P: {game.pitchers.away ?? "TBD"} vs. {game.pitchers.home ?? "TBD"}
+          {hasDecisions ? (
+            <span data-cy="score-card-decisions">
+              {decisions!.winner && `W: ${decisions!.winner.fullName}`}
+              {decisions!.winner && decisions!.loser && " · "}
+              {decisions!.loser && `L: ${decisions!.loser.fullName}`}
             </span>
+          ) : hasProbables ? (
+            <span data-cy="score-card-probables">
+              P: {game.pitchers!.away ?? "TBD"} vs. {game.pitchers!.home ?? "TBD"}
+            </span>
+          ) : null}
+          {(hasDecisions || hasProbables) && game.broadcast && (
+            <span className="text-line">│</span>
           )}
-          {game.pitchers && game.broadcast && <span className="text-line">│</span>}
           {game.broadcast && (
             <span className="overflow-hidden text-ellipsis whitespace-nowrap">{game.broadcast}</span>
           )}
