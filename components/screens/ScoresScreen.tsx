@@ -57,7 +57,8 @@ export function ScoresScreen({
   const counts = useMemo(() => {
     const live = games.filter((g) => g.status === "LIVE").length;
     const final = games.filter((g) => g.status === "FINAL").length;
-    return { live, final, total: games.length };
+    const postponed = games.filter((g) => g.status === "POSTPONED").length;
+    return { live, final, postponed, total: games.length };
   }, [games]);
 
   return (
@@ -83,7 +84,9 @@ export function ScoresScreen({
               <>
                 <span className="font-bold text-ink text-[13px]">{counts.live} live</span>
                 <span>
-                  {" "}· {counts.final} final · {counts.total - counts.live - counts.final} upcoming
+                  {" "}· {counts.final} final ·{" "}
+                  {counts.total - counts.live - counts.final - counts.postponed} upcoming
+                  {counts.postponed > 0 ? ` · ${counts.postponed} postponed` : ""}
                 </span>
               </>
             )}

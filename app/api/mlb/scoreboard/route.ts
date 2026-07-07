@@ -11,8 +11,9 @@ import type { GameSummary } from "@/lib/mlb/types";
  */
 export async function GET(req: NextRequest) {
   const date = req.nextUrl.searchParams.get("date") || todayISO();
-  // Hydrate probable pitchers, linescore (for live state), broadcasts.
-  const path = `/schedule?sportId=1&date=${date}&hydrate=probablePitcher,linescore,broadcasts,team`;
+  // Hydrate probable pitchers, linescore (for live state), broadcasts, and
+  // W/L/SV decisions (populated once a game goes final).
+  const path = `/schedule?sportId=1&date=${date}&hydrate=probablePitcher,linescore,broadcasts,team,decisions`;
 
   try {
     const json = await mlb<{ dates: { date: string; games: unknown[] }[] }>(path, {

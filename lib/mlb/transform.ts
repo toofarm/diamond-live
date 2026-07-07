@@ -85,8 +85,11 @@ function mapStatus(
   detailed?: string,
 ): GameSummary["status"] {
   if (abstract === "Live") return "LIVE";
-  if (abstract === "Final") return "FINAL";
+  // A postponed game reports abstractGameState "Final" with detailedState
+  // "Postponed", so this check MUST precede the Final branch — otherwise a
+  // rained-out game is miscategorized as a completed game.
   if (detailed && /postponed/i.test(detailed)) return "POSTPONED";
+  if (abstract === "Final") return "FINAL";
   return "SCHEDULED";
 }
 
@@ -147,6 +150,22 @@ export function mapScheduleGame(g: any, dateISO?: string): GameSummary | null {
         .filter(Boolean)
     : [];
 
+  // Scorer decisions ride on the game object once it's final (schedule
+  // `decisions` hydrate). Each role is independently optional — a win without
+  // a save is normal — so we only attach the object when at least one resolved.
+  const decRaw = g?.decisions;
+  const decisions: GameDecisions | undefined = decRaw
+    ? {
+        winner: readPitcherRef(decRaw.winner),
+        loser: readPitcherRef(decRaw.loser),
+        save: readPitcherRef(decRaw.save),
+      }
+    : undefined;
+  const decisionsPopulated =
+    decisions && (decisions.winner || decisions.loser || decisions.save)
+      ? decisions
+      : undefined;
+
   const summary: GameSummary = {
     id: g.gamePk,
     away,
@@ -163,6 +182,7 @@ export function mapScheduleGame(g: any, dateISO?: string): GameSummary | null {
       away: readPitcher(g?.teams?.away?.probablePitcher),
       home: readPitcher(g?.teams?.home?.probablePitcher),
     },
+    decisions: decisionsPopulated,
     broadcast: broadcasts.slice(0, 2).join(", ") || undefined,
     venue: g?.venue?.name,
     awayRecord: readRecord(g?.teams?.away),

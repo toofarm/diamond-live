@@ -163,6 +163,37 @@ export default function ShellLayout({ children }: { children: React.ReactNode })
     setNavHidden(false);
   }, [pathname]);
 
+  // iOS Safari (WebKit) intermittently keeps a stale composite layer for
+  // <main> across a route swap — most visibly when leaving the absolutely
+  // positioned, layer-promoted GameDetail/PlayerDetail/TeamDetail overlay back
+  // to a tab screen like /scores. The next screen mounts in the DOM but isn't
+  // painted until a touch or scroll forces a repaint.
+  //
+  // A *static* `transform: translateZ(0)` (the prior attempt) doesn't help:
+  // pinning <main> to a permanent compositing layer means its cached texture is
+  // exactly what goes stale, and a never-changing transform never triggers an
+  // invalidation. Note too that changing a transform *value* only re-composites
+  // the existing texture — it does not re-rasterize it. Only the promotion
+  // transition `none → layer` forces WebKit to raster the current DOM.
+  //
+  // So on every navigation we toggle the transform: applying translateZ(0)
+  // rasters the freshly mounted screen (it paints), and clearing it next frame
+  // rasters back into the parent (invisibly) and resets the resting state so
+  // the next nav's `none → layer` transition is again a real invalidation.
+  const mainRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    el.style.transform = "translateZ(0)";
+    // Force a synchronous style/layout flush so the promotion (and its raster)
+    // lands now instead of being coalesced away by the clear below.
+    void el.offsetHeight;
+    const raf = requestAnimationFrame(() => {
+      el.style.transform = "";
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [pathname]);
+
   /** Auth-aware write. Authenticated users go through the `upsert_profile`
    *  RPC (which also refreshes the auth snapshot so the in-memory profile
    *  catches up); guests and anonymous users write to localStorage as
@@ -261,14 +292,8 @@ export default function ShellLayout({ children }: { children: React.ReactNode })
           {userState.status === "guest" && <GuestNudgeBanner />}
 
           <main
+            ref={mainRef}
             className={`relative flex-1 min-h-0 ${isTabRoute ? "pb-[calc(env(safe-area-inset-bottom,0)+76px)] md:pb-0" : ""}`}
-            // Pin <main> to its own GPU compositor layer. Detail screens
-            // (GameDetail/PlayerDetail/TeamDetail) render as position:absolute
-            // overlays which iOS Safari promotes to a separate layer; on back
-            // navigation, the parent layer's bitmap isn't always invalidated,
-            // leaving a blank canvas until a touch/scroll forces a repaint.
-            // Keeping main on its own stable layer sidesteps the invalidation gap.
-            style={{ transform: "translateZ(0)" }}
           >
             {children}
           </main>

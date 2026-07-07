@@ -32,6 +32,10 @@
       "statusDetail": "Final",
       "dateISO": "2026-05-12",
       "inning": 9,
+      "decisions": {
+        "winner": { "id": 675911, "fullName": "Spencer Strider" },
+        "loser": { "id": 673540, "fullName": "Kodai Senga" }
+      },
       "venue": "Truist Park",
       "awayRecord": { "w": 22, "l": 17 },
       "homeRecord": { "w": 24, "l": 14 }
@@ -72,6 +76,20 @@
       "venue": "Yankee Stadium",
       "awayRecord": { "w": 18, "l": 20 },
       "homeRecord": { "w": 25, "l": 13 }
+    },
+    {
+      "id": 5,
+      "away": "CHC",
+      "home": "STL",
+      "awayScore": null,
+      "homeScore": null,
+      "status": "POSTPONED",
+      "statusDetail": "Postponed",
+      "dateISO": "2026-05-12",
+      "time": "2026-05-12T23:45:00Z",
+      "venue": "Busch Stadium",
+      "awayRecord": { "w": 21, "l": 18 },
+      "homeRecord": { "w": 17, "l": 21 }
     }
   ]
 }

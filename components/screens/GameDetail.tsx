@@ -336,7 +336,9 @@ export function GameDetail({
           )}
           {tab === "box" && <BoxTab data={data} onPlayer={onPlayer} />}
           {tab === "plays" && <PlaysTab plays={data.plays} />}
-          {tab === "pitches" && <PitchesTab data={data} units={prefs.boxScoreUnits} />}
+          {tab === "pitches" && (
+            <PitchesTab data={data} units={prefs.boxScoreUnits} onPlayer={onPlayer} />
+          )}
           {tab === "spray" && (
             <SprayTab spray={data.spray} currentBatterId={data.atBat?.batter.id} />
           )}
@@ -1160,14 +1162,21 @@ function StrikeZoneViz({ pitches, hand, units }: { pitches: Pitch[]; hand: "L" |
         <text x={zoneL - 6} y={zoneB + 14} fontSize="8" fill="var(--color-ink-3)" fontFamily="var(--font-mono)" letterSpacing="0.5" textAnchor="end">
           LOW
         </text>
+        {/* Zone is drawn from the catcher's perspective (see CATCHER VIEW
+            below): looking out at the pitcher, third base is on the left and
+            first base on the right. A right-handed batter stands in the
+            third-base box, so the RHB marker belongs on the LEFT; a lefty on
+            the RIGHT. */}
         <text
-          x={hand === "R" ? zoneR + 8 : zoneL - 8}
+          data-cy="batter-hand-indicator"
+          data-cy-hand={hand}
+          x={hand === "R" ? zoneL - 8 : zoneR + 8}
           y={cy + 4}
           fontSize="9"
           fontFamily="var(--font-mono)"
           fill="var(--color-ink-2)"
           letterSpacing="0.5"
-          textAnchor={hand === "R" ? "start" : "end"}
+          textAnchor={hand === "R" ? "end" : "start"}
         >
           {hand}HB
         </text>
@@ -1439,7 +1448,15 @@ function PlaysTab({ plays }: { plays: Play[] }) {
 
 /* ── Pitches tab ──────────────────────────────────────────────── */
 
-function PitchesTab({ data, units }: { data: GameDetailData; units: BoxScoreUnits }) {
+function PitchesTab({
+  data,
+  units,
+  onPlayer,
+}: {
+  data: GameDetailData;
+  units: BoxScoreUnits;
+  onPlayer: (id: number) => void;
+}) {
   const { summary, awayPitching, homePitching } = data;
   const playsWithPitches = data.plays.filter((p) => p.pitchSeq && p.pitchSeq.length > 0);
   const hasUsage = [...awayPitching, ...homePitching].some(
@@ -1452,8 +1469,8 @@ function PitchesTab({ data, units }: { data: GameDetailData; units: BoxScoreUnit
 
   return (
     <div className="flex flex-col gap-3">
-      <PitchUsageCard abbr={summary.away} pitchers={awayPitching} />
-      <PitchUsageCard abbr={summary.home} pitchers={homePitching} />
+      <PitchUsageCard abbr={summary.away} pitchers={awayPitching} onPlayer={onPlayer} />
+      <PitchUsageCard abbr={summary.home} pitchers={homePitching} onPlayer={onPlayer} />
 
       <h3>Recent At-Bats</h3>
 
@@ -1491,7 +1508,15 @@ function PitchesTab({ data, units }: { data: GameDetailData; units: BoxScoreUnit
 /* ── Pitch usage ──────────────────────────────────────────────── */
 
 /** Per-team card listing each pitcher's pitch-type breakdown for this game. */
-function PitchUsageCard({ abbr, pitchers }: { abbr: string; pitchers: BoxPitchingRow[] }) {
+function PitchUsageCard({
+  abbr,
+  pitchers,
+  onPlayer,
+}: {
+  abbr: string;
+  pitchers: BoxPitchingRow[];
+  onPlayer: (id: number) => void;
+}) {
   const withUsage = pitchers.filter((p) => p.pitchUsage && p.pitchUsage.length > 0);
   if (withUsage.length === 0) return null;
   return (
@@ -1501,14 +1526,20 @@ function PitchUsageCard({ abbr, pitchers }: { abbr: string; pitchers: BoxPitchin
       </div>
       <div className="flex flex-col gap-5">
         {withUsage.map((p) => (
-          <PitcherUsage key={p.id} pitcher={p} />
+          <PitcherUsage key={p.id} pitcher={p} onPlayer={onPlayer} />
         ))}
       </div>
     </div>
   );
 }
 
-function PitcherUsage({ pitcher }: { pitcher: BoxPitchingRow }) {
+function PitcherUsage({
+  pitcher,
+  onPlayer,
+}: {
+  pitcher: BoxPitchingRow;
+  onPlayer: (id: number) => void;
+}) {
   const usage = (pitcher.pitchUsage ?? []).slice().sort((a, b) => b.count - a.count);
   const total = usage.reduce((s, e) => s + e.count, 0);
   if (total === 0) return null;
@@ -1518,9 +1549,14 @@ function PitcherUsage({ pitcher }: { pitcher: BoxPitchingRow }) {
     <div>
       <div className="mb-2.5">
         <div className="flex items-baseline gap-2">
-          <span className="font-head text-[20px] font-bold text-ink tracking-[-0.5px] leading-none">
+          <button
+            data-cy="pitcher-usage-name"
+            data-cy-player-id={pitcher.id}
+            onClick={() => onPlayer(pitcher.id)}
+            className="font-head text-[20px] font-bold text-ink tracking-[-0.5px] leading-none bg-transparent border-none cursor-pointer p-0 text-left"
+          >
             {pitcher.name}
-          </span>
+          </button>
           {pitcher.live && (
             <span className="inline-flex items-center gap-1 text-[10px] font-extrabold tracking-[1.2px] text-live">
               <span className="w-1.5 h-1.5 rounded-full bg-live" />
