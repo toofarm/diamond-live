@@ -1162,14 +1162,21 @@ function StrikeZoneViz({ pitches, hand, units }: { pitches: Pitch[]; hand: "L" |
         <text x={zoneL - 6} y={zoneB + 14} fontSize="8" fill="var(--color-ink-3)" fontFamily="var(--font-mono)" letterSpacing="0.5" textAnchor="end">
           LOW
         </text>
+        {/* Zone is drawn from the catcher's perspective (see CATCHER VIEW
+            below): looking out at the pitcher, third base is on the left and
+            first base on the right. A right-handed batter stands in the
+            third-base box, so the RHB marker belongs on the LEFT; a lefty on
+            the RIGHT. */}
         <text
-          x={hand === "R" ? zoneR + 8 : zoneL - 8}
+          data-cy="batter-hand-indicator"
+          data-cy-hand={hand}
+          x={hand === "R" ? zoneL - 8 : zoneR + 8}
           y={cy + 4}
           fontSize="9"
           fontFamily="var(--font-mono)"
           fill="var(--color-ink-2)"
           letterSpacing="0.5"
-          textAnchor={hand === "R" ? "start" : "end"}
+          textAnchor={hand === "R" ? "end" : "start"}
         >
           {hand}HB
         </text>
