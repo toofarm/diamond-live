@@ -51,6 +51,16 @@ describe("/player/[id]", () => {
     cy.get('[data-cy="gamelog-row"]').should("have.length", 8);
     // Hitter mode column header (the H/AB column is unique to hitter view).
     cy.contains("H/AB").should("be.visible");
+    // Hitter columns are DATE | OPP | H/AB | H | HR | RBI | K | BB. Assert
+    // positionally rather than by text — "K" and "BB" as bare strings match
+    // too much elsewhere on the page to be safe selectors.
+    // Newest fixture game (5/12): 1-for-4 with 2 K and 1 BB.
+    cy.get('[data-cy="gamelog-row"]').first().children().as("cells");
+    cy.get("@cells").should("have.length", 8);
+    cy.get("@cells").eq(2).should("have.text", "1-4"); // H/AB
+    cy.get("@cells").eq(5).should("have.text", "0");   // RBI
+    cy.get("@cells").eq(6).should("have.text", "2");   // K
+    cy.get("@cells").eq(7).should("have.text", "1");   // BB
   });
 
   it("click History sub-tab → career tiles, year rows, and highlights render", () => {

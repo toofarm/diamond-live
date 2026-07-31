@@ -369,6 +369,7 @@ export interface PlayerGameLogRow {
   // pitching mode
   ip?: string;
   er?: number;
+  // both modes — for pitchers these are K/BB recorded, for hitters K/BB taken
   k?: number;
   bb?: number;
 }

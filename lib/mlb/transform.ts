@@ -1292,6 +1292,8 @@ export function mapPlayerGameLog(
       row.h = stat.hits ?? 0;
       row.hr = stat.homeRuns ?? 0;
       row.rbi = stat.rbi ?? 0;
+      row.k = stat.strikeOuts ?? 0;
+      row.bb = stat.baseOnBalls ?? 0;
     }
     out.push(row);
   }
