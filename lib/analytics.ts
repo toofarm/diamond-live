@@ -8,6 +8,7 @@ export const events = {
   TEAM_COMPARISON: "team_comparison",
   TEAM_SELECTION: "team_selection",
   CALENDAR_NAVIGATION: "calendar_navigation",
+  VIEW_FULL_RECORD: "view_full_record",
   THEME_CHANGE: "theme_change",
 } as const;
 
