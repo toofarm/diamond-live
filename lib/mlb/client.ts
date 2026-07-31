@@ -24,6 +24,13 @@ export interface UseApiOptions {
    * `0` (default) disables the cache — every mount triggers a network fetch.
    */
   cacheMs?: number;
+  /**
+   * Refetch the moment the tab returns to the foreground, and restart any poll
+   * interval from that point. Opt-in, for screens where the data on display is
+   * expected to be current the instant the user looks at it. Bypasses the cache
+   * like `refresh()` does.
+   */
+  refreshOnVisible?: boolean;
 }
 
 /**
@@ -62,10 +69,11 @@ function seedFromCache<T>(url: string | null, cacheMs: number): S<T> {
  * - `cacheMs > 0` and the entry is stale or missing → fetches as usual, then writes
  *   the response to the cache.
  * - `pollMs` set → refetches on that interval regardless of the cache.
+ * - `refreshOnVisible` set → refetches when the tab is foregrounded again.
  * - `refresh()` → invalidates the entry for this URL and refetches.
  */
 export function useApi<T>(url: string | null, opts: UseApiOptions = {}): UseApiState<T> {
-  const { pollMs, cacheMs = 0 } = opts;
+  const { pollMs, cacheMs = 0, refreshOnVisible = false } = opts;
 
   const [state, setState] = useState<S<T>>(() => seedFromCache<T>(url, cacheMs));
   // React "adjust state when props change" pattern — reseed from cache on URL change
@@ -113,11 +121,48 @@ export function useApi<T>(url: string | null, opts: UseApiOptions = {}): UseApiS
     return () => ac.abort();
   }, [url, tick, cacheMs]);
 
+  // Poll on an interval and, when `refreshOnVisible` is set, refetch as soon as
+  // the tab comes back to the foreground.
+  //
+  // A poll interval is not a reliable clock in a hidden tab: browsers clamp
+  // background timers to roughly once a minute, and after a few minutes of no
+  // activity budget-based throttling can stretch that out further. So a screen
+  // polling every 20s can be minutes stale by the time the user looks at it
+  // again, and the interval's next tick lands at an arbitrary offset from that
+  // moment. Firing on `visibilitychange` closes that gap, and restarting the
+  // interval off the same moment keeps the following poll a full period out
+  // instead of landing right on top of the refetch we just triggered.
+  //
+  // `setTick` is a stable setState, so this effect only re-subscribes when the
+  // URL or the options actually change.
   useEffect(() => {
-    if (!pollMs || !url) return;
-    const id = setInterval(() => setTick((t) => t + 1), pollMs);
-    return () => clearInterval(id);
-  }, [pollMs, url]);
+    if (!url) return;
+    if (!pollMs && !refreshOnVisible) return;
+
+    let id: ReturnType<typeof setInterval> | null = null;
+    const stopPolling = () => {
+      if (id !== null) clearInterval(id);
+      id = null;
+    };
+    const startPolling = () => {
+      stopPolling();
+      if (pollMs) id = setInterval(() => setTick((t) => t + 1), pollMs);
+    };
+
+    startPolling();
+    if (!refreshOnVisible) return stopPolling;
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== "visible") return;
+      setTick((t) => t + 1);
+      startPolling();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      stopPolling();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [pollMs, url, refreshOnVisible]);
 
   const refresh = () => {
     if (url) cache.delete(url);
