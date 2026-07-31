@@ -1,0 +1,434 @@
+{
+  "season": 2026,
+  "games": [
+    {
+      "id": 8001,
+      "dateISO": "2026-05-11",
+      "opp": "ATL",
+      "home": false,
+      "result": "L",
+      "score": {
+        "us": 3,
+        "them": 5
+      }
+    },
+    {
+      "id": 8002,
+      "dateISO": "2026-05-10",
+      "opp": "ATL",
+      "home": false,
+      "result": "W",
+      "score": {
+        "us": 7,
+        "them": 4
+      }
+    },
+    {
+      "id": 8003,
+      "dateISO": "2026-05-09",
+      "opp": "ATL",
+      "home": false,
+      "result": "W",
+      "score": {
+        "us": 6,
+        "them": 2
+      }
+    },
+    {
+      "id": 8004,
+      "dateISO": "2026-05-08",
+      "opp": "PHI",
+      "home": true,
+      "result": "L",
+      "score": {
+        "us": 1,
+        "them": 4
+      }
+    },
+    {
+      "id": 8005,
+      "dateISO": "2026-05-07",
+      "opp": "PHI",
+      "home": true,
+      "result": "W",
+      "score": {
+        "us": 5,
+        "them": 3
+      }
+    },
+    {
+      "id": 8006,
+      "dateISO": "2026-05-06",
+      "opp": "WSH",
+      "home": true,
+      "result": "W",
+      "score": {
+        "us": 6,
+        "them": 2
+      }
+    },
+    {
+      "id": 8007,
+      "dateISO": "2026-05-05",
+      "opp": "MIA",
+      "home": false,
+      "result": "L",
+      "score": {
+        "us": 2,
+        "them": 4
+      }
+    },
+    {
+      "id": 8008,
+      "dateISO": "2026-05-04",
+      "opp": "SDP",
+      "home": true,
+      "result": "W",
+      "score": {
+        "us": 6,
+        "them": 2
+      }
+    },
+    {
+      "id": 8009,
+      "dateISO": "2026-05-03",
+      "opp": "LAD",
+      "home": false,
+      "result": "L",
+      "score": {
+        "us": 2,
+        "them": 4
+      }
+    },
+    {
+      "id": 8010,
+      "dateISO": "2026-05-02",
+      "opp": "CHC",
+      "home": true,
+      "result": "W",
+      "score": {
+        "us": 6,
+        "them": 2
+      }
+    },
+    {
+      "id": 8011,
+      "dateISO": "2026-05-01",
+      "opp": "STL",
+      "home": false,
+      "result": "L",
+      "score": {
+        "us": 2,
+        "them": 4
+      }
+    },
+    {
+      "id": 8012,
+      "dateISO": "2026-04-30",
+      "opp": "PIT",
+      "home": true,
+      "result": "W",
+      "score": {
+        "us": 6,
+        "them": 2
+      }
+    },
+    {
+      "id": 8013,
+      "dateISO": "2026-04-29",
+      "opp": "CIN",
+      "home": false,
+      "result": "L",
+      "score": {
+        "us": 2,
+        "them": 4
+      }
+    },
+    {
+      "id": 8014,
+      "dateISO": "2026-04-28",
+      "opp": "MIL",
+      "home": true,
+      "result": "W",
+      "score": {
+        "us": 6,
+        "them": 2
+      }
+    },
+    {
+      "id": 8015,
+      "dateISO": "2026-04-27",
+      "opp": "COL",
+      "home": false,
+      "result": "W",
+      "score": {
+        "us": 6,
+        "them": 2
+      }
+    },
+    {
+      "id": 8016,
+      "dateISO": "2026-04-26",
+      "opp": "ARI",
+      "home": true,
+      "result": "L",
+      "score": {
+        "us": 2,
+        "them": 4
+      }
+    },
+    {
+      "id": 8017,
+      "dateISO": "2026-04-25",
+      "opp": "SFG",
+      "home": false,
+      "result": "W",
+      "score": {
+        "us": 6,
+        "them": 2
+      }
+    },
+    {
+      "id": 8018,
+      "dateISO": "2026-04-24",
+      "opp": "WSH",
+      "home": true,
+      "result": "L",
+      "score": {
+        "us": 2,
+        "them": 4
+      }
+    },
+    {
+      "id": 8019,
+      "dateISO": "2026-04-23",
+      "opp": "MIA",
+      "home": false,
+      "result": "W",
+      "score": {
+        "us": 6,
+        "them": 2
+      }
+    },
+    {
+      "id": 8020,
+      "dateISO": "2026-04-22",
+      "opp": "SDP",
+      "home": true,
+      "result": "L",
+      "score": {
+        "us": 2,
+        "them": 4
+      }
+    },
+    {
+      "id": 8021,
+      "dateISO": "2026-04-21",
+      "opp": "LAD",
+      "home": false,
+      "result": "W",
+      "score": {
+        "us": 6,
+        "them": 2
+      }
+    },
+    {
+      "id": 8022,
+      "dateISO": "2026-04-20",
+      "opp": "CHC",
+      "home": true,
+      "result": "L",
+      "score": {
+        "us": 2,
+        "them": 4
+      }
+    },
+    {
+      "id": 8023,
+      "dateISO": "2026-04-19",
+      "opp": "STL",
+      "home": false,
+      "result": "W",
+      "score": {
+        "us": 6,
+        "them": 2
+      }
+    },
+    {
+      "id": 8024,
+      "dateISO": "2026-04-18",
+      "opp": "PIT",
+      "home": true,
+      "result": "W",
+      "score": {
+        "us": 6,
+        "them": 2
+      }
+    },
+    {
+      "id": 8025,
+      "dateISO": "2026-04-17",
+      "opp": "CIN",
+      "home": false,
+      "result": "L",
+      "score": {
+        "us": 2,
+        "them": 4
+      }
+    },
+    {
+      "id": 8026,
+      "dateISO": "2026-04-16",
+      "opp": "MIL",
+      "home": true,
+      "result": "W",
+      "score": {
+        "us": 6,
+        "them": 2
+      }
+    },
+    {
+      "id": 8027,
+      "dateISO": "2026-04-15",
+      "opp": "COL",
+      "home": false,
+      "result": "L",
+      "score": {
+        "us": 2,
+        "them": 4
+      }
+    },
+    {
+      "id": 8028,
+      "dateISO": "2026-04-14",
+      "opp": "ARI",
+      "home": true,
+      "result": "W",
+      "score": {
+        "us": 6,
+        "them": 2
+      }
+    },
+    {
+      "id": 8029,
+      "dateISO": "2026-04-13",
+      "opp": "SFG",
+      "home": false,
+      "result": "L",
+      "score": {
+        "us": 2,
+        "them": 4
+      }
+    },
+    {
+      "id": 8030,
+      "dateISO": "2026-04-12",
+      "opp": "WSH",
+      "home": true,
+      "result": "W",
+      "score": {
+        "us": 6,
+        "them": 2
+      }
+    },
+    {
+      "id": 8031,
+      "dateISO": "2026-04-11",
+      "opp": "MIA",
+      "home": false,
+      "result": "L",
+      "score": {
+        "us": 2,
+        "them": 4
+      }
+    },
+    {
+      "id": 8032,
+      "dateISO": "2026-04-10",
+      "opp": "SDP",
+      "home": true,
+      "result": "W",
+      "score": {
+        "us": 6,
+        "them": 2
+      }
+    },
+    {
+      "id": 8033,
+      "dateISO": "2026-04-09",
+      "opp": "LAD",
+      "home": false,
+      "result": "W",
+      "score": {
+        "us": 6,
+        "them": 2
+      }
+    },
+    {
+      "id": 8034,
+      "dateISO": "2026-04-08",
+      "opp": "CHC",
+      "home": true,
+      "result": "L",
+      "score": {
+        "us": 2,
+        "them": 4
+      }
+    },
+    {
+      "id": 8035,
+      "dateISO": "2026-04-07",
+      "opp": "STL",
+      "home": false,
+      "result": "W",
+      "score": {
+        "us": 6,
+        "them": 2
+      }
+    },
+    {
+      "id": 8036,
+      "dateISO": "2026-04-05",
+      "opp": "PIT",
+      "home": true,
+      "result": "L",
+      "score": {
+        "us": 2,
+        "them": 4
+      }
+    },
+    {
+      "id": 8037,
+      "dateISO": "2026-04-04",
+      "opp": "CIN",
+      "home": false,
+      "result": "W",
+      "score": {
+        "us": 6,
+        "them": 2
+      }
+    },
+    {
+      "id": 8038,
+      "dateISO": "2026-04-03",
+      "opp": "MIL",
+      "home": true,
+      "result": "L",
+      "score": {
+        "us": 2,
+        "them": 4
+      }
+    },
+    {
+      "id": 8039,
+      "dateISO": "2026-04-02",
+      "opp": "COL",
+      "home": false,
+      "result": "W",
+      "score": {
+        "us": 6,
+        "them": 2
+      }
+    }
+  ]
+}

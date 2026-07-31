@@ -1037,10 +1037,12 @@ export function mapTeamRecord(json: any, teamMlbId: number): TeamSeasonRecord {
   return { w: 0, l: 0, pct: ".000" };
 }
 
-/** Map a `/schedule?teamId={id}` response into our last-5 games shape. Walks
- *  every game in every date, keeps FINAL games where our team played, sorts
- *  by date descending, slices to the most recent 5. */
-export function mapTeamLastGames(json: any, ourAbbr: string): TeamLastGame[] {
+/** Map a `/schedule?teamId={id}` response into our completed-games shape. Walks
+ *  every game in every date, keeps FINAL games where our team played, sorts by
+ *  date descending (most recent first). The window is whatever the caller asked
+ *  the schedule endpoint for — 30 days for the Season tab's last-5, the full
+ *  season for the full-record sheet. */
+export function mapTeamGames(json: any, ourAbbr: string): TeamLastGame[] {
   const dates = json?.dates ?? [];
   const finals: TeamLastGame[] = [];
   for (const d of dates) {
@@ -1073,7 +1075,12 @@ export function mapTeamLastGames(json: any, ourAbbr: string): TeamLastGame[] {
     }
   }
   finals.sort((a, b) => (a.dateISO < b.dateISO ? 1 : -1));
-  return finals.slice(0, 5);
+  return finals;
+}
+
+/** The Season tab's "Last 5 Games" table — the most recent slice of mapTeamGames. */
+export function mapTeamLastGames(json: any, ourAbbr: string): TeamLastGame[] {
+  return mapTeamGames(json, ourAbbr).slice(0, 5);
 }
 
 /** Pull the season totals stat object for a hitting/pitching group from
@@ -1292,6 +1299,8 @@ export function mapPlayerGameLog(
       row.h = stat.hits ?? 0;
       row.hr = stat.homeRuns ?? 0;
       row.rbi = stat.rbi ?? 0;
+      row.k = stat.strikeOuts ?? 0;
+      row.bb = stat.baseOnBalls ?? 0;
     }
     out.push(row);
   }

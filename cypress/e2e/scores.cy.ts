@@ -105,6 +105,44 @@ describe("/scores", () => {
     });
   });
 
+  // Added by Cypress Author on 2026-07-31.
+  it("background the tab, then bring it back → scoreboard refetches on return, not while hidden", () => {
+    // `document.visibilityState` is a read-only accessor inherited from
+    // Document.prototype, so override it on the AUT document before dispatching
+    // the event the browser would normally fire itself. `configurable: true`
+    // keeps it replaceable for the second call. No teardown needed: the
+    // beforeEach `visitAsUser` reloads the page for every test.
+    const setVisibility = (win: Cypress.AUTWindow, state: DocumentVisibilityState) => {
+      Object.defineProperty(win.document, "visibilityState", {
+        value: state,
+        configurable: true,
+      });
+      win.document.dispatchEvent(new win.Event("visibilitychange"));
+    };
+
+    // Baseline: only the initial mount fetch has landed. The 20s poll can't
+    // fire within this test's runtime and the notification poll is inert (the
+    // `user` fixture has notifications disabled), so any further call is
+    // attributable to the visibility listener in lib/mlb/client.ts.
+    cy.get('[data-cy="score-card"]').should("have.length.at.least", 1);
+    cy.get("@scoreboard.all").should("have.length", 1);
+
+    // Hidden: the handler checks visibilityState and bails, so no request.
+    cy.window().then((win) => setVisibility(win, "hidden"));
+    cy.get("@scoreboard.all").should("have.length", 1);
+
+    // Foregrounded: refetch immediately rather than waiting out the throttled
+    // poll interval.
+    cy.window().then((win) => setVisibility(win, "visible"));
+    cy.wait("@scoreboard");
+    cy.get("@scoreboard.all").should("have.length", 2);
+
+    // The refetch swaps data in place — cards stay rendered, and the screen
+    // must not fall back to the loading placeholder mid-refresh.
+    cy.get('[data-cy="score-card"]').should("have.length.at.least", 1);
+    cy.get('[data-cy="loading"]').should("not.exist");
+  });
+
   it("click a score card → navigates to /game/[id] for that game", () => {
     // The live game in the fixture has id=1, which the API route short-circuits
     // to FIXTURE_LIVE_GAME — so the destination page is fully populated.

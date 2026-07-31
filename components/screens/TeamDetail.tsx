@@ -8,12 +8,15 @@ import type {
   PersonnelRow,
   RosterRow,
   TeamDetailData,
+  TeamGamesData,
   TeamLastGame,
   TeamSeasonData,
   TeamSeasonStats,
 } from "@/lib/mlb/types";
 import { TEAMS } from "@/lib/mlb/teams";
 import { BackChevron, Loader, TeamBadge } from "@/components/ui/primitives";
+import { IconChevron } from "@/components/ui/icons";
+import { BottomSheet } from "@/components/ui/BottomSheet";
 import { ComparePicker, type CompareItem } from "@/components/ui/ComparePicker";
 import { currentSeason, formatDateLabel } from "@/lib/date";
 import { useTitle } from "@/lib/title";
@@ -244,7 +247,7 @@ function SeasonTab({
   return (
     <div data-cy="season-tab" className="flex flex-col gap-3.5">
       <RecordCard record={data.record} />
-      <LastGamesTable games={data.lastGames} onGame={onGame} />
+      <LastGamesTable games={data.lastGames} abbr={abbr} onGame={onGame} />
       <ComparePicker
         items={items}
         query={query}
@@ -329,14 +332,86 @@ function RecordCard({ record }: { record: TeamSeasonData["record"] }) {
   );
 }
 
+const LAST_GAMES_COLS = "60px 32px 1fr 60px";
+const FULL_RECORD_COLS = "52px 30px 1fr 56px 58px";
+
+/** One completed game. Shared by the Last-5 card and the full-record sheet —
+ *  the sheet passes `record` to fill its extra running-W–L column. */
+function GameRow({
+  game,
+  cols,
+  testId,
+  record,
+  divider,
+  onGame,
+}: {
+  game: TeamLastGame;
+  cols: string;
+  testId: string;
+  record?: string;
+  divider: boolean;
+  onGame: (id: number) => void;
+}) {
+  const { mo, dom } = formatDateLabel(game.dateISO);
+  const won = game.result === "W";
+  return (
+    <button
+      data-cy={testId}
+      data-cy-game-id={game.id}
+      onClick={() => onGame(game.id)}
+      className={`w-full grid items-center gap-2 px-3.5 md:px-4 py-2.5 bg-transparent border-none cursor-pointer text-left ${
+        divider ? "border-b border-line-2" : ""
+      }`}
+      style={{ gridTemplateColumns: cols }}
+    >
+      <span className="font-mono text-[12px] text-ink-2">
+        {mo} {dom}
+      </span>
+      <span
+        className={`inline-flex justify-center items-center font-mono text-[11px] font-bold tracking-[0.4px] px-1 rounded-[4px] ${
+          won ? "text-pos" : "text-neg"
+        }`}
+        style={{
+          background: `color-mix(in srgb, var(--color-${won ? "pos" : "neg"}) 10%, transparent)`,
+        }}
+      >
+        {game.result}
+      </span>
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="font-mono text-[11px] text-ink-3">{game.home ? "vs" : "@"}</span>
+        <TeamBadge abbr={game.opp} size={20} />
+        <span className="font-head text-[13px] font-semibold text-ink tracking-[-0.2px]">
+          {game.opp}
+        </span>
+      </div>
+      <span className="font-mono text-[13px] font-semibold text-ink text-right tracking-[-0.2px]">
+        {game.score.us}–{game.score.them}
+      </span>
+      {record !== undefined && (
+        <span className="font-mono text-[11px] text-ink-3 text-right tracking-[-0.2px]">
+          {record}
+        </span>
+      )}
+    </button>
+  );
+}
+
 function LastGamesTable({
   games,
+  abbr,
   onGame,
 }: {
   games: TeamLastGame[];
+  abbr: string;
   onGame: (id: number) => void;
 }) {
-  const cols = "60px 32px 1fr 60px";
+  const [recordOpen, setRecordOpen] = useState(false);
+
+  const openRecord = () => {
+    sendToDataLayer({ event: events.VIEW_FULL_RECORD, target: abbr });
+    setRecordOpen(true);
+  };
+
   return (
     <div className="bg-surface border border-line rounded-[14px] overflow-hidden">
       <div className="px-3.5 md:px-4 py-3 border-b border-line-2">
@@ -350,55 +425,152 @@ function LastGamesTable({
         <>
           <div
             className="grid items-center gap-2 px-3.5 md:px-4 py-1.5 font-mono text-[10px] font-bold tracking-[1.2px] uppercase text-ink-3 border-b border-line-2"
-            style={{ gridTemplateColumns: cols }}
+            style={{ gridTemplateColumns: LAST_GAMES_COLS }}
           >
             <div>Date</div>
             <div className="text-center">Res</div>
             <div>Opp</div>
             <div className="text-right">Score</div>
           </div>
-          {games.map((g, i) => {
-            const { mo, dom } = formatDateLabel(g.dateISO);
+          {games.map((g) => (
+            <GameRow
+              key={g.id}
+              game={g}
+              cols={LAST_GAMES_COLS}
+              testId="last-game-row"
+              divider
+              onGame={onGame}
+            />
+          ))}
+        </>
+      )}
+
+      <button
+        data-cy="view-full-record"
+        onClick={openRecord}
+        className="w-full flex items-center justify-center gap-1.5 px-3.5 md:px-4 py-3 bg-transparent border-none cursor-pointer font-ui text-[12px] font-bold tracking-[0.6px] uppercase text-accent hover:bg-active transition-colors"
+      >
+        View full record
+        <IconChevron size={14} className="rotate-90" />
+      </button>
+
+      <FullRecordSheet
+        abbr={abbr}
+        open={recordOpen}
+        onClose={() => setRecordOpen(false)}
+        onGame={(id) => {
+          setRecordOpen(false);
+          onGame(id);
+        }}
+      />
+    </div>
+  );
+}
+
+/** Every completed regular-season game, in an index-card sheet. The fetch is
+ *  lazy — `useApi(null)` no-ops until the user actually opens the sheet, and
+ *  the 5-minute cache keeps re-opens instant. */
+function FullRecordSheet({
+  abbr,
+  open,
+  onClose,
+  onGame,
+}: {
+  abbr: string;
+  open: boolean;
+  onClose: () => void;
+  onGame: (id: number) => void;
+}) {
+  const [everOpened, setEverOpened] = useState(false);
+  if (open && !everOpened) setEverOpened(true);
+
+  const { data, loading, error } = useApi<TeamGamesData>(
+    everOpened ? `/api/mlb/team/${abbr}/games` : null,
+    { cacheMs: 300_000 },
+  );
+
+  // Games arrive newest-first. Walk them oldest-first to stamp each with the
+  // record as of that game, then flip back so the table reads newest-first.
+  const { rows, w, l } = useMemo(() => {
+    const asc: { game: TeamLastGame; w: number; l: number }[] = [];
+    for (const game of (data?.games ?? []).slice().reverse()) {
+      const prev = asc[asc.length - 1];
+      asc.push({
+        game,
+        w: (prev?.w ?? 0) + (game.result === "W" ? 1 : 0),
+        l: (prev?.l ?? 0) + (game.result === "W" ? 0 : 1),
+      });
+    }
+    const final = asc[asc.length - 1];
+    return { rows: asc.reverse(), w: final?.w ?? 0, l: final?.l ?? 0 };
+  }, [data]);
+
+  const team = TEAMS[abbr];
+  const title = team ? `${team.city} ${team.name}` : abbr;
+  const season = data?.season ?? currentSeason();
+  const subtitle =
+    rows.length > 0
+      ? `${season} Record · ${w}–${l} · ${rows.length} games`
+      : `${season} Record`;
+
+  return (
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      title={title}
+      subtitle={subtitle}
+      testId="full-record-sheet"
+    >
+      {loading && !data ? (
+        <Loader />
+      ) : error ? (
+        <div className="p-6 text-center text-neg text-[13px]">
+          Failed to load the full record.
+        </div>
+      ) : rows.length === 0 ? (
+        <div data-cy="full-record-empty" className="p-6 text-center text-ink-3 text-[13px]">
+          No completed games this season.
+        </div>
+      ) : (
+        <>
+          <div
+            className="sticky top-0 z-10 grid items-center gap-2 px-3.5 md:px-4 py-2 bg-surface-2 font-mono text-[10px] font-bold tracking-[1.2px] uppercase text-ink-3 border-b border-line-2"
+            style={{ gridTemplateColumns: FULL_RECORD_COLS }}
+          >
+            <div>Date</div>
+            <div className="text-center">Res</div>
+            <div>Opp</div>
+            <div className="text-right">Score</div>
+            <div className="text-right">Rec</div>
+          </div>
+          {rows.map(({ game, w: rw, l: rl }, i) => {
+            const prev = rows[i - 1]?.game.dateISO;
+            const month = formatDateLabel(game.dateISO).mo;
+            const newMonth = !prev || formatDateLabel(prev).mo !== month;
             return (
-              <button
-                key={g.id}
-                data-cy="last-game-row"
-                data-cy-game-id={g.id}
-                onClick={() => onGame(g.id)}
-                className={`w-full grid items-center gap-2 px-3.5 md:px-4 py-2.5 bg-transparent border-none cursor-pointer text-left ${
-                  i === games.length - 1 ? "" : "border-b border-line-2"
-                }`}
-                style={{ gridTemplateColumns: cols }}
-              >
-                <span className="font-mono text-[12px] text-ink-2">
-                  {mo} {dom}
-                </span>
-                <span
-                  className={`inline-flex justify-center items-center font-mono text-[11px] font-bold tracking-[0.4px] px-1 rounded-[4px] ${
-                    g.result === "W" ? "text-pos" : "text-neg"
-                  }`}
-                  style={{
-                    background: `color-mix(in srgb, var(--color-${g.result === "W" ? "pos" : "neg"}) 10%, transparent)`,
-                  }}
-                >
-                  {g.result}
-                </span>
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-mono text-[11px] text-ink-3">{g.home ? "vs" : "@"}</span>
-                  <TeamBadge abbr={g.opp} size={20} />
-                  <span className="font-head text-[13px] font-semibold text-ink tracking-[-0.2px]">
-                    {g.opp}
-                  </span>
-                </div>
-                <span className="font-mono text-[13px] font-semibold text-ink text-right tracking-[-0.2px]">
-                  {g.score.us}–{g.score.them}
-                </span>
-              </button>
+              <div key={game.id}>
+                {newMonth && (
+                  <div
+                    data-cy="full-record-month"
+                    className="px-3.5 md:px-4 py-1.5 bg-surface font-mono text-[10px] font-bold tracking-[1.4px] uppercase text-ink-3 border-b border-line-2"
+                  >
+                    {month}
+                  </div>
+                )}
+                <GameRow
+                  game={game}
+                  cols={FULL_RECORD_COLS}
+                  testId="full-record-row"
+                  record={`${rw}-${rl}`}
+                  divider={i !== rows.length - 1}
+                  onGame={onGame}
+                />
+              </div>
             );
           })}
         </>
       )}
-    </div>
+    </BottomSheet>
   );
 }
 

@@ -990,9 +990,11 @@ function GamelogTab({ personId, mode }: { personId: number; mode: StatMode }) {
     return `${m}/${d}`;
   };
 
-  // Hitter: DATE | OPP | H/AB | H | HR | RBI
+  // Hitter: DATE | OPP | H/AB | H | HR | RBI | K | BB
   // Pitcher: DATE | OPP | IP | H | ER | K | BB
-  const hitterCols = "48px 48px 1fr 36px 36px 36px";
+  // Five numeric hitter columns at 32px still leave ~110px for H/AB in the
+  // 402px mobile viewport, so nothing needs to scroll horizontally.
+  const hitterCols = "48px 48px 1fr 32px 32px 32px 32px 32px";
   const pitcherCols = "48px 48px 56px 36px 36px 36px 36px";
 
   return (
@@ -1052,6 +1054,8 @@ function GamelogTab({ personId, mode }: { personId: number; mode: StatMode }) {
                 <div className="text-right bg-surface">H</div>
                 <div className="text-right bg-surface">HR</div>
                 <div className="text-right bg-surface">RBI</div>
+                <div className="text-right bg-surface">K</div>
+                <div className="text-right bg-surface">BB</div>
               </div>
               {rows.map((g, i) => (
                 <div
@@ -1067,6 +1071,8 @@ function GamelogTab({ personId, mode }: { personId: number; mode: StatMode }) {
                   <div className={`font-mono text-[13px] text-right ${(g.h ?? 0) > 0 ? "text-ink font-semibold" : "text-ink-3"}`}>{g.h ?? 0}</div>
                   <div className={`font-mono text-[13px] text-right ${(g.hr ?? 0) > 0 ? "text-accent font-bold" : "text-ink-3"}`}>{g.hr ?? 0}</div>
                   <div className={`font-mono text-[13px] text-right ${(g.rbi ?? 0) > 0 ? "text-ink font-semibold" : "text-ink-3"}`}>{g.rbi ?? 0}</div>
+                  <div className={`font-mono text-[13px] text-right ${(g.k ?? 0) > 0 ? "text-ink" : "text-ink-3"}`}>{g.k ?? 0}</div>
+                  <div className={`font-mono text-[13px] text-right ${(g.bb ?? 0) > 0 ? "text-ink" : "text-ink-3"}`}>{g.bb ?? 0}</div>
                 </div>
               ))}
             </>

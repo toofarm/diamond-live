@@ -315,6 +315,13 @@ export interface TeamSeasonData {
   };
 }
 
+/** Every completed regular-season game for one team, most recent first.
+ *  Backs the Season tab's full-record sheet. */
+export interface TeamGamesData {
+  season: number;
+  games: TeamLastGame[];
+}
+
 export interface PersonnelRow {
   id?: number;
   name: string;
@@ -369,6 +376,7 @@ export interface PlayerGameLogRow {
   // pitching mode
   ip?: string;
   er?: number;
+  // both modes — for pitchers these are K/BB recorded, for hitters K/BB taken
   k?: number;
   bb?: number;
 }

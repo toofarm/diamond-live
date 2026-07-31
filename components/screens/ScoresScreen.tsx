@@ -44,9 +44,14 @@ export function ScoresScreen({
 
   const date = strip[dateIdx]?.iso ?? "";
   const isToday = strip[dateIdx]?.today === true;
+  // No `cacheMs` — this screen always goes to the network, by design. The poll
+  // only runs for today (past/future dates aren't live), but the visibility
+  // refetch is unconditional: a backgrounded tab's poll gets throttled to a
+  // crawl, and even a non-today board moves (postponements, probables), so one
+  // request per foreground return is worth the freshness.
   const { data, loading, error } = useApi<ScoresResp>(
     date ? `/api/mlb/scoreboard?date=${date}` : null,
-    { pollMs: isToday ? 20_000 : undefined },
+    { pollMs: isToday ? 20_000 : undefined, refreshOnVisible: true },
   );
 
   const games = useMemo<GameSummary[]>(() => data?.games ?? [], [data]);
