@@ -1,8 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  use,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { area as d3Area, curveMonotoneX, line as d3Line, scaleLinear } from "d3";
-import { useApi } from "@/lib/mlb/client";
+import { useApiResource, useIsClient, type ApiResource } from "@/lib/mlb/client";
 import type {
   AtBat,
   BatterSpray,
@@ -44,6 +53,35 @@ type SubTab = "summary" | "box" | "plays" | "pitches" | "spray";
 
 const SUB_TABS: readonly SubTab[] = ["summary", "box", "plays", "pitches", "spray"];
 
+/** Poll cadence for the live feed. Kept in sync with the Data Cache TTLs on
+ *  /api/mlb/game/[gamePk], which must stay strictly under it — see the comment
+ *  in that route. */
+const POLL_MS = 10_000;
+
+/**
+ * Whether this game is still capable of changing, and so still worth polling.
+ *
+ *   LIVE       — obviously.
+ *   SCHEDULED  — the whole point is to catch first pitch, so keep watching.
+ *   POSTPONED  — done changing. A reschedule moves the game to another date,
+ *                which is a different board and a different URL.
+ *   FINAL      — done changing, with one exception: W/L/SV decisions post a
+ *                moment *after* a game goes final, so a game that ends while
+ *                you're watching would otherwise freeze without them. Keep
+ *                polling until they land, then stop for good. Opening a game
+ *                that finished hours ago therefore issues zero polls, which is
+ *                the case that actually matters for bandwidth.
+ *
+ * Module-level for a stable identity — `pollWhile` is an effect dependency.
+ */
+function gameCanStillChange(data: GameDetailData | null): boolean {
+  const summary = data?.summary;
+  if (!summary) return true; // nothing has landed yet; let the first fetch decide
+  if (summary.status === "POSTPONED") return false;
+  if (summary.status !== "FINAL") return true;
+  return !(summary.decisions?.winner || summary.decisions?.loser);
+}
+
 const SPRAY_COLORS: Record<SprayOutcome, string> = {
   HR: "#C73E1D",
   "3B": "#D97C2A",
@@ -75,7 +113,115 @@ export function GameDetail({
   onPlayer: (id: number) => void;
   onTeam: (abbr: string) => void;
 }) {
-  const { data, loading, error, refresh, fetching } = useApi<GameDetailData>(`/api/mlb/game/${gameId}`, { pollMs: 15_000 });
+  // The live feed is fetched on the client only — see `useIsClient`. The server
+  // pass renders the same header-plus-spinner the boundary falls back to, so
+  // there's no visible handoff at hydration.
+  const isClient = useIsClient();
+
+  return (
+    <div data-cy="game-detail" className="absolute inset-0 bg-canvas flex flex-col z-10 overflow-hidden">
+      {isClient ? (
+        <GameDetailLoader
+          gameId={gameId}
+          onBack={onBack}
+          onPlayer={onPlayer}
+          onTeam={onTeam}
+        />
+      ) : (
+        <GameDetailPending onBack={onBack} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Owns the request and the boundary. Split from `GameDetailBody` because the
+ * component that creates the promise must not be the one that suspends — see
+ * the note on `useApiResource`.
+ */
+function GameDetailLoader({
+  gameId,
+  onBack,
+  onPlayer,
+  onTeam,
+}: {
+  gameId: number;
+  onBack: () => void;
+  onPlayer: (id: number) => void;
+  onTeam: (abbr: string) => void;
+}) {
+  // Freshness over everything: `useApiResource` has no cache tier at all, so
+  // this mount goes to the network and so does every poll. `refreshOnVisible`
+  // covers the returning-from-a-background-tab case, where the poll timer has
+  // been throttled or paused outright; the body adds a `focus` listener for the
+  // same reason.
+  //
+  // `pollWhile` retires the interval once the game can no longer change, so a
+  // completed game costs exactly one request. The visibility and focus refetches
+  // deliberately survive that, as the cheap recovery path for a late correction.
+  const { resource, refresh, refreshing, generation } = useApiResource<GameDetailData>(
+    `/api/mlb/game/${gameId}`,
+    { pollMs: POLL_MS, refreshOnVisible: true, pollWhile: gameCanStillChange },
+  );
+
+  // Keyed per game, so arriving at a different game suspends into the spinner
+  // rather than showing the previous game's box score. Polls replace the
+  // resource inside a transition and leave the key alone, so a live game's
+  // numbers swap in place without the view ever blinking back to the fallback.
+  return (
+    <Suspense key={gameId} fallback={<GameDetailPending onBack={onBack} />}>
+      <GameDetailBody
+        resource={resource}
+        refresh={refresh}
+        refreshing={refreshing}
+        generation={generation}
+        onPlayer={onPlayer}
+        onTeam={onTeam}
+        onBack={onBack}
+      />
+    </Suspense>
+  );
+}
+
+/** Header bar plus spinner. Shown for the server pass and until the first
+ *  request settles. The back affordance is deliberately live here so a slow
+ *  feed can't trap the user on a blank screen. */
+function GameDetailPending({ onBack }: { onBack: () => void }) {
+  return (
+    <div
+      data-cy="game-detail-pending"
+      className="px-3.5 md:px-6 pb-2.5 bg-surface border-b border-line-2 pt-4"
+    >
+      <div className="flex items-center gap-2">
+        <BackChevron onClick={onBack} label="Scores" />
+        <div className="flex-1" />
+      </div>
+      <Loader />
+    </div>
+  );
+}
+
+function GameDetailBody({
+  resource,
+  refresh,
+  refreshing,
+  generation,
+  onBack,
+  onPlayer,
+  onTeam,
+}: {
+  resource: ApiResource<GameDetailData>;
+  refresh: () => void;
+  refreshing: boolean;
+  generation: number;
+  onBack: () => void;
+  onPlayer: (id: number) => void;
+  onTeam: (abbr: string) => void;
+}) {
+  // Suspends until the request settles. A failed request resolves to the last
+  // good payload plus an `error`, so a dropped poll leaves the box score up
+  // instead of tearing it down.
+  const { data, error } = use(resource);
   const [tab, setTab] = useTabParam<SubTab>("tab", "summary", SUB_TABS);
   // User-initiated tab change. Fires TAB_NAVIGATION with the destination tab
   // in `target` so GTM can attribute engagement per sub-view. Re-clicks of the
@@ -89,7 +235,7 @@ export function GameDetail({
   };
 
   // Local debounce for the manual-refresh button. The button is disabled
-  // whenever a fetch is in flight (`fetching`) AND for a short cooldown
+  // whenever a refresh is in flight (`refreshing`) AND for a short cooldown
   // after each manual click — so rapid taps can't queue back-to-back
   // requests against the MLB API. The cooldown is short enough (1.5s) to
   // not feel sticky if the user genuinely wants a second fetch.
@@ -101,7 +247,7 @@ export function GameDetail({
       if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
     };
   }, []);
-  const refreshDisabled = fetching || refreshCooldown;
+  const refreshDisabled = refreshing || refreshCooldown;
   const handleManualRefresh = () => {
     if (refreshDisabled) return;
     refresh();
@@ -112,24 +258,15 @@ export function GameDetail({
     );
   };
 
-  // The 15s poll above keeps a foregrounded tab fresh, but browsers throttle
-  // background-tab timers heavily (often paused entirely), so a user returning
-  // to this view after switching away can see up-to-15s-stale data. Fire an
-  // immediate refresh when the tab becomes visible or the window regains focus
-  // so they're greeted with current game state. `refresh`'s identity changes
-  // each useApi render, but registering/unregistering two listeners on each
-  // change is negligible and the cleanup ensures we never double-bind.
+  // `refreshOnVisible` on the hook covers `visibilitychange`. Window `focus`
+  // is a separate signal it doesn't watch — a tab can be visible the whole time
+  // while the browser itself sits in the background, where timers are throttled
+  // just the same — so cover that here. `refresh` is a stable useCallback, so
+  // this binds once per mount.
   useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState === "visible") refresh();
-    };
     const onFocus = () => refresh();
-    document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onFocus);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", onFocus);
-    };
+    return () => window.removeEventListener("focus", onFocus);
   }, [refresh]);
 
   const user = useUser();
@@ -187,26 +324,29 @@ export function GameDetail({
   };
 
   return (
-    <div data-cy="game-detail" className="absolute inset-0 bg-canvas flex flex-col z-10 overflow-hidden">
+    <>
       <div className="px-3.5 md:px-6 pb-2.5 bg-surface border-b border-line-2 pt-4">
         <div className="flex items-center gap-2">
           <BackChevron onClick={onBack} label="Scores" />
           <div className="flex-1" />
+          {isLive && (
+            <RefreshCountdown key={generation} intervalMs={POLL_MS} />
+          )}
           {isLive && (
             <button
               data-cy="manual-refresh"
               type="button"
               onClick={handleManualRefresh}
               disabled={refreshDisabled}
-              aria-label={fetching ? "Refreshing game data…" : "Refresh game data"}
-              aria-busy={fetching}
+              aria-label={refreshing ? "Refreshing game data…" : "Refresh game data"}
+              aria-busy={refreshing}
               className={`p-1.5 rounded-full bg-transparent border-none flex items-center justify-center transition-opacity ${refreshDisabled ? "cursor-default opacity-40" : "cursor-pointer hover:bg-chip"
                 }`}
             >
               <IconRefresh
                 size={16}
                 stroke="var(--color-live)"
-                className={fetching || refreshDisabled ? "animate-spin" : ""}
+                className={refreshDisabled ? "animate-spin" : ""}
               />
             </button>
           )}
@@ -225,7 +365,6 @@ export function GameDetail({
           )}
         </div>
 
-        {loading && !game && <Loader />}
         {error && <div className="p-6 text-neg">Failed to load game.</div>}
 
         {game && (
@@ -344,7 +483,49 @@ export function GameDetail({
           )}
         </div>
       )}
-    </div>
+    </>
+  );
+}
+
+/**
+ * Seconds until the next automatic refresh of the live feed.
+ *
+ * Two deliberate choices. It is its own component because it re-renders once a
+ * second and `GameDetailBody` renders d3 charts that must not — keeping the
+ * interval and the state down here means only this `<span>` re-renders. And it
+ * carries no reset logic at all: the parent gives it `key={generation}`, so each
+ * refresh remounts it and the countdown restarts from a fresh `useState`.
+ *
+ * The count restarts when a refresh *lands*, not when it is issued, so it can
+ * sit on 0 for the fraction of a second between the poll firing and its response
+ * committing. It parks on 0 for longer in two honest cases: a backgrounded tab,
+ * where the browser has throttled the poll timer, and a request that is hanging
+ * or has failed — `generation` only reaches this component once a replacement
+ * actually commits. In both, a refresh really is overdue. No separate in-flight
+ * glyph: the refresh button beside this already spins while one is running.
+ */
+function RefreshCountdown({ intervalMs }: { intervalMs: number }) {
+  const [remaining, setRemaining] = useState(() => Math.round(intervalMs / 1000));
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setRemaining((r) => (r > 0 ? r - 1 : 0));
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <span
+      data-cy="refresh-countdown"
+      data-cy-remaining={remaining}
+      // A per-second live region would be punishing to hear; the refresh button
+      // beside this already carries an accessible label and `aria-busy`.
+      aria-hidden="true"
+      title="Time to next refresh"
+      className="font-mono text-[10px] text-ink-3 tracking-[0.4px] tabular-nums"
+    >
+      {remaining}s
+    </span>
   );
 }
 

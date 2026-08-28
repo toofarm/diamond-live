@@ -120,7 +120,7 @@ describe("/scores", () => {
       win.document.dispatchEvent(new win.Event("visibilitychange"));
     };
 
-    // Baseline: only the initial mount fetch has landed. The 20s poll can't
+    // Baseline: only the initial mount fetch has landed. The 10s poll can't
     // fire within this test's runtime and the notification poll is inert (the
     // `user` fixture has notifications disabled), so any further call is
     // attributable to the visibility listener in lib/mlb/client.ts.
@@ -138,9 +138,53 @@ describe("/scores", () => {
     cy.get("@scoreboard.all").should("have.length", 2);
 
     // The refetch swaps data in place — cards stay rendered, and the screen
-    // must not fall back to the loading placeholder mid-refresh.
+    // must not fall back to the loading placeholder mid-refresh. Polls bump the
+    // fetch generation inside a transition, so React keeps the resolved board
+    // mounted rather than re-suspending the boundary into its skeleton.
     cy.get('[data-cy="score-card"]').should("have.length.at.least", 1);
     cy.get('[data-cy="loading"]').should("not.exist");
+    cy.get('[data-cy="scores-skeleton"]').should("not.exist");
+  });
+
+  // Added by Cypress Author on 2026-08-28.
+  it("select a different date in the strip → skeleton shows while it loads, then that date's board renders", () => {
+    // Each date gets its own keyed <Suspense> boundary, so a date change is a
+    // first load: it suspends to the skeleton rather than swapping in place.
+    // The strip is built from the real `new Date()` at runtime, so read the
+    // target date out of the DOM instead of hardcoding an ISO string.
+    cy.get('[data-cy="date-pill"][data-cy-selected="true"]')
+      .next('[data-cy="date-pill"]')
+      .invoke("attr", "data-cy-date")
+      .then((iso) => {
+        // Registered after the beforeEach catch-all — Cypress matches handlers
+        // newest-first, so this more specific one wins for the target date. The
+        // delay makes the fallback observable instead of a single-frame flash.
+        cy.intercept("GET", `/api/mlb/scoreboard?date=${iso}`, {
+          fixture: "scoreboard-future",
+          delay: 400,
+        }).as("scoreboardFuture");
+
+        cy.get(`[data-cy="date-pill"][data-cy-date="${iso}"]`).click();
+
+        // Suspended: the board is replaced by the skeleton, but the strip lives
+        // outside the boundary and stays on screen (and clickable) throughout.
+        cy.get('[data-cy="scores-skeleton"]').should("be.visible");
+        cy.get('[data-cy="loading"]').should("be.visible");
+        cy.get('[data-cy="date-pill"]').should("have.length.at.least", 2);
+
+        cy.wait("@scoreboardFuture");
+
+        // Resolved: the fallback is gone and the *new* date's games are on
+        // screen — the future fixture is two scheduled games (HOU@SEA, TOR@BAL),
+        // none of which appear in scoreboard-today.
+        cy.get('[data-cy="scores-skeleton"]').should("not.exist");
+        cy.get('[data-cy="scores-screen"]').should("be.visible");
+        cy.get('[data-cy="score-card"]').should("have.length", 2);
+        cy.get('[data-cy="score-card"][data-cy-game-id="101"]').should("exist");
+        cy.get('[data-cy="score-card"][data-cy-game-id="102"]').should("exist");
+        // Today's live game must not survive the date change.
+        cy.get('[data-cy="score-card"][data-cy-game-id="1"]').should("not.exist");
+      });
   });
 
   it("click a score card → navigates to /game/[id] for that game", () => {
@@ -148,5 +192,91 @@ describe("/scores", () => {
     // to FIXTURE_LIVE_GAME — so the destination page is fully populated.
     cy.get('[data-cy="score-card"][data-cy-game-id="1"]').click();
     cy.location("pathname").should("eq", "/game/1");
+  });
+
+  // Added by Cypress Author on 2026-08-28.
+  it("view a board where every game has finished → the poll never fires again", () => {
+    // Deliberately NOT using cy.clock here. `pollWhile` tears the interval down
+    // from a promise callback, which lands in a different microtask than the
+    // render that commits the data — so a fake clock ticked right after the DOM
+    // assertions below can catch the interval in the instant before it is
+    // cleared, fire it, and produce a request storm that has nothing to do with
+    // the behaviour under test. Spanning one real poll interval is slower but
+    // races with nothing. The wait below is the subject of the assertion, not an
+    // attempt to paper over timing.
+
+    // Derive an all-finished slate from the existing fixture rather than
+    // maintaining a near-duplicate of it. POSTPONED is left alone: it counts as
+    // terminal too, so the board should still go quiet.
+    cy.fixture("scoreboard-today").then((board) => {
+      const finished = {
+        ...board,
+        games: board.games.map((g: { status: string }) => ({
+          ...g,
+          status: g.status === "POSTPONED" ? "POSTPONED" : "FINAL",
+        })),
+      };
+      cy.intercept("GET", "/api/mlb/scoreboard*", { body: finished }).as("finishedBoard");
+    });
+
+    cy.visitAsUser("/scores");
+    cy.wait("@finishedBoard");
+    cy.get('[data-cy="score-card"]').should("have.length.at.least", 1);
+    cy.get('[data-cy="score-card-status"]').filter(':contains("LIVE")').should("not.exist");
+
+    // Baseline immediately before the wait: navigating away from the beforeEach
+    // page lets that instance fire a parting request which this intercept also
+    // matches. Measuring the delta isolates the only thing under test — whether
+    // the poll interval is still alive.
+    let baseline = 0;
+    cy.get("@finishedBoard.all").then((calls) => {
+      baseline = (calls as unknown as unknown[]).length;
+    });
+
+    // Sit out a full poll interval (10s) plus margin. A live board would have
+    // issued at least one request in this window — the positive-control test
+    // below proves that — so a flat count here means the interval really was
+    // retired.
+    cy.wait(13_000);
+    cy.get("@finishedBoard.all").should((calls) => {
+      expect(calls, "finished board issues no polls").to.have.length(baseline);
+    });
+  });
+
+  // Added by Cypress Author on 2026-08-28.
+  it("view a board with a game still in progress → poll keeps firing on the interval", () => {
+    // Positive control for the test above. The default fixture has LIVE and
+    // SCHEDULED games, so the board must keep polling.
+    //
+    // A fake interval clock is safe here, unlike in the negative test: `pollable`
+    // stays true for this fixture, so there is no teardown to race against and
+    // ticking cannot catch the interval mid-transition.
+    cy.clock(null, ["setInterval", "clearInterval"]);
+    cy.mockScoreboard();
+    cy.visitAsUser("/scores");
+    cy.wait("@scoreboard");
+    cy.get('[data-cy="score-card-status"]')
+      .filter(':contains("LIVE")')
+      .should("have.length.at.least", 1);
+
+    let baseline = 0;
+    cy.get("@scoreboard.all").then((calls) => {
+      baseline = (calls as unknown as unknown[]).length;
+    });
+
+    cy.tick(30_000);
+    // `refresh()` runs inside a transition, so React schedules the render — and
+    // the fetch inside it — after the tick returns. Give it a beat to land.
+    cy.wait(750);
+    cy.get("@scoreboard.all").should((calls) => {
+      const delta = (calls as unknown as unknown[]).length - baseline;
+      expect(delta, "live board keeps polling").to.be.greaterThan(0);
+      // Upper bound is the real point of this assertion. A `refresh` whose state
+      // updater is impure makes every suspended retry mint another request, and
+      // that loop reads as "polling works" to a lower-bound-only check while it
+      // hammers the endpoint hundreds of times. Three fake intervals must produce
+      // a handful of requests, not a flood.
+      expect(delta, "polling is paced, not a retry storm").to.be.at.most(8);
+    });
   });
 });

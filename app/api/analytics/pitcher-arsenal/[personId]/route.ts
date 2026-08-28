@@ -9,11 +9,6 @@
  * RLS on `analytics.pitcher_arsenal` would also reject them — we want
  * the client to see a clear `401` rather than an empty `[]` (which RLS
  * would produce silently) so the UI can route the user to /login.
- *
- * Cache: deliberately not cached. The analytics tables refresh in-place
- * (overwrites, not append-only) so a stale cache could serve last
- * season's mix after the rollover. The data is small (≤ ~15 rows) and
- * the page is mounted infrequently, so per-request hits are fine.
  */
 
 import type { NextRequest } from "next/server";

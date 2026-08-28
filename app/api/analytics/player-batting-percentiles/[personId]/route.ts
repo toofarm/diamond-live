@@ -15,11 +15,6 @@
  * `analytics.player_batting_percentiles` would also reject them — we want the
  * client to see a clear `401` rather than an empty result (which RLS would
  * produce silently) so the UI can route the user to /login.
- *
- * Cache: deliberately not cached. The analytics tables refresh in-place
- * (overwrites, not append-only) so a stale cache could serve last season's
- * ranks after the rollover. The payload is a single row and the page mounts
- * infrequently, so per-request hits are fine.
  */
 
 import type { NextRequest } from "next/server";

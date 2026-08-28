@@ -29,9 +29,14 @@ export async function GET(_: Request, { params }: { params: Promise<{ gamePk: st
   const liveUrl = `https://statsapi.mlb.com/api/v1.1/game/${id}/feed/live`;
   const wpUrl = `https://statsapi.mlb.com/api/v1/game/${id}/winProbability`;
   try {
+    // Both TTLs must stay strictly under GameDetail's poll interval, or a poll
+    // can never outrun the Data Cache and the extra requests buy nothing — see
+    // the same reasoning in app/api/mlb/scoreboard/route.ts. At 5s a 10s poll
+    // always crosses a boundary, while concurrent viewers of the same game
+    // still collapse onto roughly one upstream pair per 5s.
     const [liveRes, wpRes] = await Promise.all([
-      fetch(liveUrl, { next: { revalidate: 10 } }),
-      fetch(wpUrl, { next: { revalidate: 10 } }),
+      fetch(liveUrl, { next: { revalidate: 5 } }),
+      fetch(wpUrl, { next: { revalidate: 5 } }),
     ]);
     if (!liveRes.ok) {
       return Response.json({ error: `MLB ${liveRes.status}` }, { status: 502 });
