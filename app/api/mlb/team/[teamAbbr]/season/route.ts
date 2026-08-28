@@ -113,5 +113,9 @@ export async function GET(
     },
   };
 
-  return Response.json(body, { headers: CACHE_HEADERS.LIVE });
+  // Season aggregates don't need up-to-the-minute freshness, and every sibling
+  // team route serves the same 5-minute tier. The previous `LIVE` (`no-store`)
+  // forfeited browser caching while still serving data up to `revalidate: 300`
+  // old — strictness the payload never asked for.
+  return Response.json(body, { headers: CACHE_HEADERS.STATIC_5M });
 }

@@ -1,0 +1,43 @@
+{
+  "date": "2026-05-13",
+  "games": [
+    {
+      "id": 101,
+      "away": "HOU",
+      "home": "SEA",
+      "awayScore": null,
+      "homeScore": null,
+      "status": "SCHEDULED",
+      "statusDetail": "Scheduled",
+      "time": "2026-05-13T21:10:00Z",
+      "dateISO": "2026-05-13",
+      "pitchers": {
+        "away": "Framber Valdez",
+        "home": "Logan Gilbert"
+      },
+      "broadcast": "SPCH, ROOT",
+      "venue": "T-Mobile Park",
+      "awayRecord": { "w": 21, "l": 18 },
+      "homeRecord": { "w": 19, "l": 20 }
+    },
+    {
+      "id": 102,
+      "away": "TOR",
+      "home": "BAL",
+      "awayScore": null,
+      "homeScore": null,
+      "status": "SCHEDULED",
+      "statusDetail": "Scheduled",
+      "time": "2026-05-13T23:05:00Z",
+      "dateISO": "2026-05-13",
+      "pitchers": {
+        "away": "Kevin Gausman",
+        "home": "Grayson Rodriguez"
+      },
+      "broadcast": "SN, MASN",
+      "venue": "Oriole Park at Camden Yards",
+      "awayRecord": { "w": 20, "l": 19 },
+      "homeRecord": { "w": 23, "l": 16 }
+    }
+  ]
+}

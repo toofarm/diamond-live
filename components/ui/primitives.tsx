@@ -444,6 +444,9 @@ export function DateStrip({
         return (
           <button
             key={d.iso}
+            data-cy="date-pill"
+            data-cy-date={d.iso}
+            data-cy-selected={sel ? "true" : "false"}
             onClick={() => onSelect(i)}
             className={`min-w-[52px] px-1 pt-1.5 pb-2 rounded-[10px] border-none cursor-pointer font-ui flex flex-col items-center gap-px shrink-0 ${sel ? "bg-accent text-white" : "bg-transparent text-ink"
               }`}

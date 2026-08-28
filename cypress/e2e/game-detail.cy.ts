@@ -6,7 +6,7 @@ describe("/game/[id]", () => {
   beforeEach(() => {
     // /game/1 is short-circuited server-side in app/api/mlb/game/[gamePk]/route.ts
     // to FIXTURE_LIVE_GAME (NYM @ PHI, TOP 7, 4-2), so no Cypress intercept is
-    // required for the page to be hermetic. The 15s poll re-fetches the same
+    // required for the page to be hermetic. The 10s poll re-fetches the same
     // payload from the same handler.
     cy.visitAsUser("/game/1");
     cy.get('[data-cy="game-detail"]').should("be.visible");
@@ -124,5 +124,203 @@ describe("/game/[id]", () => {
       .should("contain", "Kodai Senga")
       .click();
     cy.location("pathname").should("eq", "/player/605135");
+  });
+
+  // Added by Cypress Author on 2026-08-28.
+  it("open a game whose feed is slow → pending spinner shows with the back affordance, then the hero renders", () => {
+    // Delay the real handler's response instead of stubbing a body: /game/1 is
+    // short-circuited server-side to FIXTURE_LIVE_GAME, so letting it through
+    // keeps these assertions on the true payload shape. The delay is what makes
+    // the Suspense fallback observable rather than a single-frame flash.
+    cy.intercept("GET", "/api/mlb/game/1", (req) => {
+      req.on("response", (res) => res.setDelay(600));
+    }).as("slowFeed");
+
+    // Re-visit so the intercept is registered before the mount fetch — the
+    // beforeEach visit has already resolved by this point.
+    cy.visitAsUser("/game/1");
+
+    // Suspended: the fallback stands in for the whole view, but the back
+    // affordance stays live so a slow feed can't strand the user with no way out.
+    cy.get('[data-cy="game-detail-pending"]').should("be.visible");
+    cy.get('[data-cy="game-detail-pending"]').contains("Scores").should("be.visible");
+    cy.get('[data-cy="hero-headline"]').should("not.exist");
+
+    cy.wait("@slowFeed");
+
+    // Resolved: fallback retired, real hero committed (fixture is 4-2, TOP 7).
+    cy.get('[data-cy="game-detail-pending"]').should("not.exist");
+    cy.get('[data-cy="hero-headline"]').should("contain", "4").and("contain", "2");
+    cy.get('[data-cy="live-pill"]').should("be.visible").and("contain", "LIVE");
+  });
+
+  // Added by Cypress Author on 2026-08-28.
+  it("background the tab, then bring it back → feed refetches and swaps in place, never showing the pending spinner", () => {
+    // `document.visibilityState` is a read-only accessor inherited from
+    // Document.prototype, so override it on the AUT document before dispatching
+    // the event the browser would normally fire itself. Same technique as
+    // scores.cy.ts. No teardown needed: each test re-visits.
+    const setVisibility = (win: Cypress.AUTWindow, state: DocumentVisibilityState) => {
+      Object.defineProperty(win.document, "visibilityState", {
+        value: state,
+        configurable: true,
+      });
+      win.document.dispatchEvent(new win.Event("visibilitychange"));
+    };
+
+    cy.intercept("GET", "/api/mlb/game/1").as("feed");
+    cy.visitAsUser("/game/1");
+    cy.wait("@feed");
+    cy.get('[data-cy="hero-headline"]').should("be.visible");
+
+    // Capture the baseline rather than assuming it: the 10s poll and the window
+    // `focus` listener can both legitimately add a call before we get here.
+    let baseline = 0;
+    cy.get("@feed.all").then((calls) => {
+      baseline = (calls as unknown as unknown[]).length;
+    });
+
+    // Hidden: the handler checks visibilityState and bails, so no new request.
+    cy.window().then((win) => setVisibility(win, "hidden"));
+    cy.get("@feed.all").should((calls) => {
+      expect(calls, "no refetch while hidden").to.have.length(baseline);
+    });
+
+    // Foregrounded: refetch immediately rather than waiting out the throttled
+    // poll interval.
+    cy.window().then((win) => setVisibility(win, "visible"));
+    cy.get("@feed.all").should((calls) => {
+      expect(calls, "refetched on foreground").to.have.length.greaterThan(baseline);
+    });
+
+    // The refetch replaces the resource inside a transition, so React keeps the
+    // committed view mounted — the box score must not blink back to the spinner.
+    cy.get('[data-cy="hero-headline"]').should("be.visible");
+    cy.get('[data-cy="game-detail-pending"]').should("not.exist");
+    cy.get('[data-cy="live-pill"]').should("be.visible");
+  });
+
+  // Added by Cypress Author on 2026-08-28.
+  it("view a live game → time-to-refresh ticker counts down beside the refresh button and resets on refresh", () => {
+    // Ticker and button are siblings in the header, both gated on LIVE.
+    cy.get('[data-cy="refresh-countdown"]').should("exist");
+    cy.get('[data-cy="manual-refresh"]').should("exist");
+
+    // Starts at the full 10s poll interval. The attribute mirrors the rendered
+    // text, and is the stable thing to assert on — the visible glyph is
+    // aria-hidden by design.
+    cy.get('[data-cy="refresh-countdown"]')
+      .invoke("attr", "data-cy-remaining")
+      .then((initial) => {
+        expect(Number(initial), "starts at the poll interval").to.be.within(9, 10);
+      });
+
+    // Counts down rather than sitting still. Retried assertions do the waiting,
+    // so there's no fixed sleep here.
+    cy.get('[data-cy="refresh-countdown"]', { timeout: 6000 })
+      .should(($el) => {
+        expect(Number($el.attr("data-cy-remaining"))).to.be.lessThan(9);
+      });
+
+    // A manual refresh remounts the ticker via its `generation` key, so the
+    // count climbs back toward the top of the interval.
+    cy.intercept("GET", "/api/mlb/game/1").as("manualFeed");
+    cy.get('[data-cy="manual-refresh"]').click();
+    cy.wait("@manualFeed");
+    cy.get('[data-cy="refresh-countdown"]', { timeout: 6000 })
+      .should(($el) => {
+        expect(
+          Number($el.attr("data-cy-remaining")),
+          "countdown restarted after refresh",
+        ).to.be.greaterThan(7);
+      });
+  });
+
+  // Added by Cypress Author on 2026-08-28.
+  it("open a completed game → no refresh controls, and the poll never fires again", () => {
+    // Deliberately NOT using cy.clock here. `pollWhile` tears the interval down
+    // from a promise callback, which lands in a different microtask than the
+    // render that commits the data — so a fake clock ticked right after the DOM
+    // assertions below can catch the interval in the instant before it is
+    // cleared, fire it, and produce a request storm unrelated to the behaviour
+    // under test. Spanning one real poll interval is slower but races with
+    // nothing. The wait below is the subject of the assertion.
+
+    // Reuse the server's live fixture and rewrite just the status + decisions,
+    // rather than hand-maintaining a whole second GameDetailData payload.
+    cy.intercept("GET", "/api/mlb/game/1", (req) => {
+      req.continue((res) => {
+        res.body.summary.status = "FINAL";
+        res.body.summary.decisions = {
+          winner: { id: 554430, fullName: "Zack Wheeler" },
+          loser: { id: 605135, fullName: "Kodai Senga" },
+        };
+      });
+    }).as("finalFeed");
+
+    cy.visitAsUser("/game/1");
+    cy.wait("@finalFeed");
+
+    // A completed game offers no live affordances: no LIVE pill, and — as of
+    // this change — no manual-refresh button and no countdown beside it.
+    cy.get('[data-cy="hero-headline"]').should("contain", "FINAL");
+    cy.get('[data-cy="live-pill"]').should("not.exist");
+    cy.get('[data-cy="manual-refresh"]').should("not.exist");
+    cy.get('[data-cy="refresh-countdown"]').should("not.exist");
+
+    // Baseline the count immediately before the wait. It is not always 1:
+    // navigating away from the beforeEach page lets that instance fire a parting
+    // request which this intercept also matches. Measuring the delta isolates
+    // the only thing under test here — whether the poll interval is still alive.
+    let baseline = 0;
+    cy.get("@finalFeed.all").then((calls) => {
+      baseline = (calls as unknown as unknown[]).length;
+    });
+
+    // Sit out a full poll interval (10s) plus margin. A live game would have
+    // issued at least one request in this window — the positive-control test
+    // below proves that — so a flat count here means the interval was retired
+    // when the response came back FINAL with decisions.
+    cy.wait(13_000);
+    cy.get("@finalFeed.all").should((calls) => {
+      expect(calls, "completed game issues no polls").to.have.length(baseline);
+    });
+  });
+
+  // Added by Cypress Author on 2026-08-28.
+  it("open a live game → poll keeps firing on the interval", () => {
+    // Counterpart to the completed-game test above, and the proof that its flat
+    // request count means something. Guards against `pollWhile` over-reaching and
+    // killing polling for games that genuinely still change.
+    //
+    // A fake interval clock is safe here, unlike in the negative test: `pollable`
+    // stays true for a live game, so there is no teardown to race against.
+    cy.clock(null, ["setInterval", "clearInterval"]);
+    cy.intercept("GET", "/api/mlb/game/1").as("liveFeed");
+
+    cy.visitAsUser("/game/1");
+    cy.wait("@liveFeed");
+    cy.get('[data-cy="live-pill"]').should("be.visible");
+
+    // Same delta-across-the-tick measurement as above, opposite expectation.
+    let baseline = 0;
+    cy.get("@liveFeed.all").then((calls) => {
+      baseline = (calls as unknown as unknown[]).length;
+    });
+
+    cy.tick(30_000);
+    // `refresh()` runs inside a transition, so React schedules the render — and
+    // the fetch inside it — after the tick returns. Give it a beat to land.
+    cy.wait(750);
+    cy.get("@liveFeed.all").should((calls) => {
+      const delta = (calls as unknown as unknown[]).length - baseline;
+      expect(delta, "live game keeps polling").to.be.greaterThan(0);
+      // Upper bound is the real point of this assertion. A `refresh` whose state
+      // updater is impure makes every suspended retry mint another request, and
+      // that loop reads as "polling works" to a lower-bound-only check while it
+      // hammers the endpoint hundreds of times. Three fake intervals must produce
+      // a handful of requests, not a flood.
+      expect(delta, "polling is paced, not a retry storm").to.be.at.most(8);
+    });
   });
 });
