@@ -140,34 +140,41 @@ describe("/game/[id]", () => {
       });
     });
 
-    // Updated 2026-09-03: the game line condensed to label/value pairs and the
-    // ball/strike split folded in beside the rest of the per-game stats.
-    it("open the sheet → the game line renders every stat as a label/value pair", () => {
+    // Updated 2026-09-04: the game line split in two — a rule-underlined top
+    // line in box-score reading order, then the rest as secondary stats.
+    it("open the sheet → the game line reads as a top line above secondary stats", () => {
       openSenga();
       cy.get('[data-cy="pitcher-game-sheet"]').within(() => {
-        // 8 box-score stats + the three count-work columns + batters faced.
-        cy.get('[data-cy="pitcher-sheet-stat"]').should("have.length", 12);
-        const line: Array<[string, string]> = [
+        // Top line: box-score reading order, closing on the pitch count.
+        const topLine: Array<[string, string]> = [
           ["IP", "5.2"],
+          ["K", "7"],
+          ["BB", "2"],
           ["H", "5"],
           ["R", "2"],
+          ["Pitches", "92"],
+        ];
+        cy.get('[data-cy="pitcher-top-line-stat"]').should("have.length", topLine.length);
+        topLine.forEach(([stat, value]) => {
+          cy.get(`[data-cy="pitcher-top-line-stat"][data-cy-stat="${stat}"]`)
+            .should("contain", value);
+        });
+        // Everything below the rule, including the count work: 59 of Senga's
+        // 92 pitches were strikes → 64%.
+        const secondary: Array<[string, string]> = [
           ["ER", "2"],
-          ["BB", "2"],
-          ["K", "7"],
           ["HR", "0"],
-          ["P", "92"],
-          // Balls and strikes sit in the same grid as everything else:
-          // 59 of 92 pitches were strikes → 64%.
           ["STR", "59"],
           ["BALL", "33"],
           ["STR%", "64%"],
           ["BF", "24"],
         ];
-        line.forEach(([stat, value]) => {
+        cy.get('[data-cy="pitcher-sheet-stat"]').should("have.length", secondary.length);
+        secondary.forEach(([stat, value]) => {
           cy.get(`[data-cy="pitcher-sheet-stat"][data-cy-stat="${stat}"]`)
             .should("contain", value);
         });
-        // The split no longer gets its own bar — it reads as plain stats.
+        // Neither row is the old dedicated split bar.
         cy.get('[data-cy="pitcher-sheet-split"]').should("not.exist");
       });
     });
@@ -210,6 +217,12 @@ describe("/game/[id]", () => {
         .and("contain", "26 pitches")
         // Nothing is filtered out, so the caption names no side.
         .and("not.contain", "vs");
+      // Average velo of the plotted pitches. The fixture generates velos from
+      // a seed (lib/mlb/fixtures.ts locationsFor), so assert the shape and the
+      // unit rather than pinning a number a fixture tweak would invalidate.
+      cy.get('[data-cy="pitcher-sheet-zone-velo"]')
+        .invoke("text")
+        .should("match", /\d+\.\d MPH/);
       cy.get('[data-cy="pitch-location-dot"]').should("have.length", 26);
       // Dots are colored by outcome, so each carries the result it plots.
       cy.get('[data-cy="pitch-location-dot"][data-cy-result="ball"]').should("exist");
@@ -225,6 +238,11 @@ describe("/game/[id]", () => {
       cy.get('[data-cy="pitcher-sheet-zone-caption"]')
         .should("contain", "Curve")
         .and("contain", "8 pitches");
+      // Velo is averaged over the newly plotted set, so it re-renders with the
+      // selection rather than sticking to the previous pitch type.
+      cy.get('[data-cy="pitcher-sheet-zone-velo"]')
+        .invoke("text")
+        .should("match", /\d+\.\d MPH/);
       cy.get('[data-cy="pitch-location-dot"]').should("have.length", 8);
     });
 
@@ -236,9 +254,11 @@ describe("/game/[id]", () => {
       // with them: FF 10, FS 10, SL 5, SI 4, CB 3, CT 3.
       cy.get('[data-cy="pitcher-sheet-mix-chip"]').first().should("contain", "FF").and("contain", "(10)");
       cy.get('[data-cy="pitcher-sheet-mix-chip"][data-cy-type="CT"]').should("contain", "(3)");
+      // Whole caption in one assertion here: velo sits between the pitch name
+      // and the count, so the count keeps its "N pitches vs LHB" reading.
       cy.get('[data-cy="pitcher-sheet-zone-caption"]')
-        .should("contain", "4-Seam")
-        .and("contain", "10 pitches vs LHB");
+        .invoke("text")
+        .should("match", /4-Seam\s*·\s*\d+\.\d MPH\s*·\s*10 pitches vs LHB/);
       cy.get('[data-cy="pitch-location-dot"]').should("have.length", 10);
     });
 

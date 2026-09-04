@@ -1914,11 +1914,11 @@ function SheetSection({
  *  screens read as the same stat vocabulary. */
 function SheetStat({ label, value }: { label: string; value: string | number }) {
   return (
-    <div data-cy="pitcher-sheet-stat" data-cy-stat={label}>
+    <div data-cy="pitcher-sheet-stat" data-cy-stat={label} className="flex gap-1 items-center">
       <div className="font-ui text-[10px] font-bold tracking-[1.2px] uppercase text-ink-3">
         {label}
       </div>
-      <div className="mt-0.5 font-mono text-[14px] font-semibold text-ink">{value}</div>
+      <div className="mt-0.5 font-mono text-[12px] font-semibold text-ink">{value}</div>
     </div>
   );
 }
@@ -1971,9 +1971,8 @@ function BatterHandFilter({
             data-sliding-key={key}
             aria-pressed={on}
             onClick={() => onChange(key)}
-            className={`relative px-2.5 py-0.5 rounded-full border-none bg-transparent cursor-pointer font-ui text-[10px] font-bold uppercase tracking-[0.8px] transition-colors duration-200 ${
-              on ? "text-white" : "text-ink-2"
-            }`}
+            className={`relative px-2.5 py-0.5 rounded-full border-none bg-transparent cursor-pointer font-ui text-[10px] font-bold uppercase tracking-[0.8px] transition-colors duration-200 ${on ? "text-white" : "text-ink-2"
+              }`}
           >
             {label}
           </button>
@@ -2044,9 +2043,8 @@ function PitchMixChips({
             aria-label={`${name}, ${e.count} pitches`}
             title={name}
             onClick={() => onSelect(e.type)}
-            className={`${shell} cursor-pointer transition-colors ${
-              on ? "bg-active border-accent" : "bg-chip border-transparent hover:border-line"
-            }`}
+            className={`${shell} cursor-pointer transition-colors ${on ? "bg-active border-accent" : "bg-chip border-transparent hover:border-line"
+              }`}
           >
             {body}
           </button>
@@ -2078,15 +2076,15 @@ function PitchLocationPlot({
       hands={
         hand === "all"
           ? [
-              { hand: "R", dim: true },
-              { hand: "L", dim: true },
-            ]
+            { hand: "R", dim: true },
+            { hand: "L", dim: true },
+          ]
           : [{ hand }]
       }
       handTestId="pitch-plot-hand-marker"
-      // Deliberately no redrawKey: the zone is a fixed backdrop here, and
-      // re-running its draw-on animation every time a chip is toggled would
-      // pull the eye to the chrome instead of the dots that actually changed.
+    // Deliberately no redrawKey: the zone is a fixed backdrop here, and
+    // re-running its draw-on animation every time a chip is toggled would
+    // pull the eye to the chrome instead of the dots that actually changed.
     >
       <g data-cy="pitcher-sheet-zone">
         {pitches.map((p, i) => (
@@ -2175,6 +2173,16 @@ function PitcherGameSheet({
     [inHand, activeType],
   );
 
+  // Velo rides along on every location row, so the caption can average the
+  // exact set being plotted. A zeroed velo means the feed didn't report one
+  // (same convention formatVelo reads), so those are left out rather than
+  // dragging the average toward zero.
+  const avgVelo = useMemo(() => {
+    const known = plotted.filter((l) => l.velo > 0);
+    if (known.length === 0) return null;
+    return known.reduce((sum, l) => sum + l.velo, 0) / known.length;
+  }, [plotted]);
+
   const hasMix = locations.length > 0 || gameMix.entries.length > 0;
 
   // The transform backfills `balls` whenever `strikes` is present, so one guard
@@ -2186,13 +2194,16 @@ function PitcherGameSheet({
 
   // Box-score reading order first, then the count work. Anything the feed
   // hasn't populated drops out rather than showing a placeholder dash.
-  const line: Array<{ label: string; value: string | number }> = [
+  const topLine: Array<{ label: string; value: string | number }> = [
     { label: "IP", value: pitcher.ip },
     { label: "K", value: pitcher.k },
     { label: "BB", value: pitcher.bb },
-    { label: "P", value: pitcher.pitches ?? total },
     { label: "H", value: pitcher.h },
     { label: "R", value: pitcher.r },
+    { label: "Pitches", value: pitcher.pitches ?? total },
+  ]
+
+  const line: Array<{ label: string; value: string | number }> = [
     { label: "ER", value: pitcher.er },
     { label: "HR", value: pitcher.hr },
     ...(hasSplit
@@ -2236,7 +2247,25 @@ function PitcherGameSheet({
         </button>
 
         <SheetSection label="This Game">
-          <div data-cy="pitcher-sheet-line" className="grid grid-cols-5 gap-x-2 gap-y-3">
+          <ul data-cy="pitcher-top-line-sheet" className="flex gap-4 items-center mb-2
+          py-1 border-b border-accent">
+            {topLine.map((s) => (
+              <li
+                key={s.label}
+                data-cy="pitcher-top-line-stat"
+                data-cy-stat={s.label}
+                className="flex gap-1 items-center"
+              >
+                <div className="font-ui text-[12px] font-bold tracking-[1.2px] uppercase text-ink-3">
+                  {s.label}
+                </div>
+                <div className="font-mono text-[16px] font-semibold text-ink">
+                  {s.value}
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div data-cy="pitcher-sheet-line" className="flex gap-4">
             {line.map((s) => (
               <SheetStat key={s.label} label={s.label} value={s.value} />
             ))}
@@ -2270,6 +2299,14 @@ function PitcherGameSheet({
                   <span className="font-head text-[13px] font-bold text-ink tracking-[-0.2px]">
                     {PITCH_TYPE_NAMES[activeType] ?? activeType}
                   </span>
+                  {/* Velo sits between the name and the count so the count
+                      keeps its "N pitches vs LHB" reading intact. */}
+                  {avgVelo !== null && (
+                    <span data-cy="pitcher-sheet-zone-velo" className="font-mono text-[11px] text-ink-3">
+                      {" · "}
+                      {formatVelo(avgVelo, units).value} {formatVelo(avgVelo, units).label}
+                    </span>
+                  )}
                   <span className="font-mono text-[11px] text-ink-3">
                     {" · "}
                     {plotted.length} {plotted.length === 1 ? "pitch" : "pitches"}
