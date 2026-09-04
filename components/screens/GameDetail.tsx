@@ -20,6 +20,7 @@ import type {
   GameDecisions,
   GameDetailData,
   Pitch,
+  PitchLocation,
   PitcherRef,
   Play,
   ProbableStarters,
@@ -32,6 +33,7 @@ import type {
 import { TEAMS } from "@/lib/mlb/teams";
 import { BackChevron, TeamBadge, BaseDiamond, Loader, OutDots } from "@/components/ui/primitives";
 import { IconRefresh } from "@/components/ui/icons";
+import { BottomSheet } from "@/components/ui/BottomSheet";
 import { DEFAULT_PREFS, useUser, type BoxScoreUnits } from "@/lib/storage";
 import { formatLocalTime } from "@/lib/date";
 import { useTitle } from "@/lib/title";
@@ -1298,94 +1300,131 @@ function AtBatCard({
   );
 }
 
-function StrikeZoneViz({ pitches, hand, units }: { pitches: Pitch[]; hand: "L" | "R"; units: BoxScoreUnits }) {
-  const W = 280;
-  const H = 280;
-  const cx = W / 2;
-  const cy = 130;
-  const zw = 120;
-  const zh = 140;
-  const sx = (x: number) => cx + x * (zw / 2);
-  const sy = (y: number) => cy - y * (zh / 2);
-  const zoneL = cx - zw / 2;
-  const zoneR = cx + zw / 2;
-  const zoneT = cy - zh / 2;
-  const zoneB = cy + zh / 2;
+/* ── Strike zone ──────────────────────────────────────────────── */
 
-  const plateY = cy + zh / 2 + 50;
+/** Zone geometry, shared by every plot that draws into it so the at-bat view
+ *  and the pitcher sheet's location plot stay dimensionally identical. */
+const ZONE = { w: 280, h: 280, cx: 140, cy: 130, zw: 120, zh: 140 } as const;
+const ZONE_L = ZONE.cx - ZONE.zw / 2;
+const ZONE_R = ZONE.cx + ZONE.zw / 2;
+const ZONE_T = ZONE.cy - ZONE.zh / 2;
+const ZONE_B = ZONE.cy + ZONE.zh / 2;
+
+/** Zone coordinates (interior -1..1) → SVG user units. */
+const zoneX = (x: number) => ZONE.cx + x * (ZONE.zw / 2);
+const zoneY = (y: number) => ZONE.cy - y * (ZONE.zh / 2);
+
+/**
+ * The zone itself: backing panel, rule-of-thirds grid, home plate, and the
+ * batter-side markers — everything except the pitches. Callers draw their own
+ * marks as children using `zoneX`/`zoneY`.
+ *
+ * The zone is drawn from the catcher's perspective: looking out at the
+ * pitcher, third base is on the left and first base on the right. A
+ * right-handed batter stands in the third-base box, so the RHB marker belongs
+ * on the LEFT and a lefty on the RIGHT.
+ */
+function StrikeZoneFrame({
+  hands,
+  handTestId,
+  redrawKey,
+  children,
+}: {
+  /** Batter-side markers to label. Dimmed ones read as context rather than a
+   *  statement about who's hitting — used when a plot spans both sides. */
+  hands: Array<{ hand: "L" | "R"; dim?: boolean }>;
+  handTestId?: string;
+  /** Changing this re-runs the zone's draw-on animation. */
+  redrawKey?: string | number;
+  children?: React.ReactNode;
+}) {
+  const plateY = ZONE.cy + ZONE.zh / 2 + 50;
   const plateW = 80;
   const plate = [
-    [cx - plateW / 2, plateY],
-    [cx + plateW / 2, plateY],
-    [cx + plateW / 2, plateY + 14],
-    [cx, plateY + 28],
-    [cx - plateW / 2, plateY + 14],
+    [ZONE.cx - plateW / 2, plateY],
+    [ZONE.cx + plateW / 2, plateY],
+    [ZONE.cx + plateW / 2, plateY + 14],
+    [ZONE.cx, plateY + 28],
+    [ZONE.cx - plateW / 2, plateY + 14],
   ]
     .map((p) => p.join(","))
     .join(" ");
 
   return (
     <div className="relative flex justify-center">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-[320px] h-auto block">
-        <rect x={zoneL - 18} y={zoneT - 18} width={zw + 36} height={zh + 36} fill="var(--color-chip)" opacity={0.5} rx="3" />
-        <rect x={zoneL} y={zoneT} width={zw} height={zh} fill="var(--color-surface)" />
-        <g key={pitches.length} fill="none">
-          <rect x={zoneL} y={zoneT} width={zw} height={zh} pathLength="1" stroke="var(--color-ink-2)" strokeWidth="1.5" className="dl-zone-demarc" />
-          <line x1={zoneL + zw / 3} y1={zoneT} x2={zoneL + zw / 3} y2={zoneB} pathLength="1" stroke="var(--color-line)" strokeWidth="0.75" className="dl-zone-demarc" style={{ animationDelay: "120ms" }} />
-          <line x1={zoneL + (2 * zw) / 3} y1={zoneT} x2={zoneL + (2 * zw) / 3} y2={zoneB} pathLength="1" stroke="var(--color-line)" strokeWidth="0.75" className="dl-zone-demarc" style={{ animationDelay: "180ms" }} />
-          <line x1={zoneL} y1={zoneT + zh / 3} x2={zoneR} y2={zoneT + zh / 3} pathLength="1" stroke="var(--color-line)" strokeWidth="0.75" className="dl-zone-demarc" style={{ animationDelay: "240ms" }} />
-          <line x1={zoneL} y1={zoneT + (2 * zh) / 3} x2={zoneR} y2={zoneT + (2 * zh) / 3} pathLength="1" stroke="var(--color-line)" strokeWidth="0.75" className="dl-zone-demarc" style={{ animationDelay: "300ms" }} />
+      <svg viewBox={`0 0 ${ZONE.w} ${ZONE.h}`} className="w-full max-w-[320px] h-auto block">
+        <rect x={ZONE_L - 18} y={ZONE_T - 18} width={ZONE.zw + 36} height={ZONE.zh + 36} fill="var(--color-chip)" opacity={0.5} rx="3" />
+        <rect x={ZONE_L} y={ZONE_T} width={ZONE.zw} height={ZONE.zh} fill="var(--color-surface)" />
+        <g key={redrawKey} fill="none">
+          <rect x={ZONE_L} y={ZONE_T} width={ZONE.zw} height={ZONE.zh} pathLength="1" stroke="var(--color-ink-2)" strokeWidth="1.5" className="dl-zone-demarc" />
+          <line x1={ZONE_L + ZONE.zw / 3} y1={ZONE_T} x2={ZONE_L + ZONE.zw / 3} y2={ZONE_B} pathLength="1" stroke="var(--color-line)" strokeWidth="0.75" className="dl-zone-demarc" style={{ animationDelay: "120ms" }} />
+          <line x1={ZONE_L + (2 * ZONE.zw) / 3} y1={ZONE_T} x2={ZONE_L + (2 * ZONE.zw) / 3} y2={ZONE_B} pathLength="1" stroke="var(--color-line)" strokeWidth="0.75" className="dl-zone-demarc" style={{ animationDelay: "180ms" }} />
+          <line x1={ZONE_L} y1={ZONE_T + ZONE.zh / 3} x2={ZONE_R} y2={ZONE_T + ZONE.zh / 3} pathLength="1" stroke="var(--color-line)" strokeWidth="0.75" className="dl-zone-demarc" style={{ animationDelay: "240ms" }} />
+          <line x1={ZONE_L} y1={ZONE_T + (2 * ZONE.zh) / 3} x2={ZONE_R} y2={ZONE_T + (2 * ZONE.zh) / 3} pathLength="1" stroke="var(--color-line)" strokeWidth="0.75" className="dl-zone-demarc" style={{ animationDelay: "300ms" }} />
         </g>
 
-        <text x={zoneL - 6} y={zoneT - 6} fontSize="8" fill="var(--color-ink-3)" fontFamily="var(--font-mono)" letterSpacing="0.5" textAnchor="end">
+        <text x={ZONE_L - 6} y={ZONE_T - 6} fontSize="8" fill="var(--color-ink-3)" fontFamily="var(--font-mono)" letterSpacing="0.5" textAnchor="end">
           HIGH
         </text>
-        <text x={zoneL - 6} y={zoneB + 14} fontSize="8" fill="var(--color-ink-3)" fontFamily="var(--font-mono)" letterSpacing="0.5" textAnchor="end">
+        <text x={ZONE_L - 6} y={ZONE_B + 14} fontSize="8" fill="var(--color-ink-3)" fontFamily="var(--font-mono)" letterSpacing="0.5" textAnchor="end">
           LOW
         </text>
-        {/* Zone is drawn from the catcher's perspective (see CATCHER VIEW
-            below): looking out at the pitcher, third base is on the left and
-            first base on the right. A right-handed batter stands in the
-            third-base box, so the RHB marker belongs on the LEFT; a lefty on
-            the RIGHT. */}
-        <text
-          data-cy="batter-hand-indicator"
-          data-cy-hand={hand}
-          x={hand === "R" ? zoneL - 8 : zoneR + 8}
-          y={cy + 4}
-          fontSize="9"
-          fontFamily="var(--font-mono)"
-          fill="var(--color-ink-2)"
-          letterSpacing="0.5"
-          textAnchor={hand === "R" ? "end" : "start"}
-        >
-          {hand}HB
-        </text>
+        {hands.map(({ hand, dim }) => (
+          <text
+            key={hand}
+            data-cy={handTestId}
+            data-cy-hand={hand}
+            x={hand === "R" ? ZONE_L - 8 : ZONE_R + 8}
+            y={ZONE.cy + 4}
+            fontSize="9"
+            fontFamily="var(--font-mono)"
+            fill={dim ? "var(--color-ink-3)" : "var(--color-ink-2)"}
+            opacity={dim ? 0.55 : 1}
+            letterSpacing="0.5"
+            textAnchor={hand === "R" ? "end" : "start"}
+          >
+            {hand}HB
+          </text>
+        ))}
 
         <polygon points={plate} fill="var(--color-surface-2)" stroke="var(--color-ink-2)" strokeWidth="1" />
-        <text x={cx} y={plateY + 46} fontSize="8" fill="var(--color-ink-3)" fontFamily="var(--font-mono)" letterSpacing="0.6" textAnchor="middle">
+        <text x={ZONE.cx} y={plateY + 46} fontSize="8" fill="var(--color-ink-3)" fontFamily="var(--font-mono)" letterSpacing="0.6" textAnchor="middle">
           CATCHER VIEW
         </text>
 
-        {pitches.map((p) => {
-          const px = sx(p.x);
-          const py = sy(p.y);
-          const c = PITCH_RESULT_COLORS[p.result];
-          return (
-            <g key={p.n}>
-              <circle cx={px} cy={py} r="10" fill={c.fill} stroke="var(--color-surface)" strokeWidth="1.5" />
-              <text x={px} y={py + 3} textAnchor="middle" fontSize="9" fontWeight="700" fontFamily="var(--font-mono)" fill={c.ink} letterSpacing="-0.3">
-                {Math.round(units === "metric" ? p.velo * 1.609344 : p.velo)}
-              </text>
-              <circle cx={px + 8.5} cy={py - 8.5} r="5.5" fill="var(--color-ink)" stroke="var(--color-surface)" strokeWidth="1.25" />
-              <text x={px + 8.5} y={py - 6.5} textAnchor="middle" fontSize="7" fontWeight="700" fontFamily="var(--font-mono)" fill="var(--color-surface)">
-                {p.n}
-              </text>
-            </g>
-          );
-        })}
+        {children}
       </svg>
     </div>
+  );
+}
+
+/** The live at-bat's zone: every pitch of the plate appearance, each bubble
+ *  carrying its velocity and sequence number. */
+function StrikeZoneViz({ pitches, hand, units }: { pitches: Pitch[]; hand: "L" | "R"; units: BoxScoreUnits }) {
+  return (
+    <StrikeZoneFrame
+      hands={[{ hand }]}
+      handTestId="batter-hand-indicator"
+      redrawKey={pitches.length}
+    >
+      {pitches.map((p) => {
+        const px = zoneX(p.x);
+        const py = zoneY(p.y);
+        const c = PITCH_RESULT_COLORS[p.result];
+        return (
+          <g key={p.n}>
+            <circle cx={px} cy={py} r="10" fill={c.fill} stroke="var(--color-surface)" strokeWidth="1.5" />
+            <text x={px} y={py + 3} textAnchor="middle" fontSize="9" fontWeight="700" fontFamily="var(--font-mono)" fill={c.ink} letterSpacing="-0.3">
+              {Math.round(units === "metric" ? p.velo * 1.609344 : p.velo)}
+            </text>
+            <circle cx={px + 8.5} cy={py - 8.5} r="5.5" fill="var(--color-ink)" stroke="var(--color-surface)" strokeWidth="1.25" />
+            <text x={px + 8.5} y={py - 6.5} textAnchor="middle" fontSize="7" fontWeight="700" fontFamily="var(--font-mono)" fill="var(--color-surface)">
+              {p.n}
+            </text>
+          </g>
+        );
+      })}
+    </StrikeZoneFrame>
   );
 }
 
@@ -1639,6 +1678,27 @@ function PitchesTab({
   onPlayer: (id: number) => void;
 }) {
   const { summary, awayPitching, homePitching } = data;
+
+  // `open` is tracked alongside the id rather than by nulling the selection, so
+  // the sheet keeps its subject through the close animation. The row itself is
+  // re-resolved from `data` on every render — the feed polls every 10s, and a
+  // sheet left open on a live arm should tick up with it, not freeze on the
+  // snapshot that was current when it was tapped.
+  const [sheet, setSheet] = useState<{ id: number; open: boolean } | null>(null);
+  const openPitcher = useCallback((id: number) => setSheet({ id, open: true }), []);
+  const closePitcher = useCallback(
+    () => setSheet((s) => (s ? { ...s, open: false } : s)),
+    [],
+  );
+  const selected = useMemo(() => {
+    if (!sheet) return null;
+    const away = awayPitching.find((p) => p.id === sheet.id);
+    if (away) return { pitcher: away, abbr: summary.away };
+    const home = homePitching.find((p) => p.id === sheet.id);
+    if (home) return { pitcher: home, abbr: summary.home };
+    return null;
+  }, [sheet, awayPitching, homePitching, summary.away, summary.home]);
+
   const playsWithPitches = data.plays.filter((p) => p.pitchSeq && p.pitchSeq.length > 0);
   const hasUsage = [...awayPitching, ...homePitching].some(
     (p) => p.pitchUsage && p.pitchUsage.length > 0,
@@ -1650,8 +1710,8 @@ function PitchesTab({
 
   return (
     <div className="flex flex-col gap-3">
-      <PitchUsageCard abbr={summary.away} pitchers={awayPitching} onPlayer={onPlayer} />
-      <PitchUsageCard abbr={summary.home} pitchers={homePitching} onPlayer={onPlayer} />
+      <PitchUsageCard abbr={summary.away} pitchers={awayPitching} onPitcher={openPitcher} />
+      <PitchUsageCard abbr={summary.home} pitchers={homePitching} onPitcher={openPitcher} />
 
       <h3>Recent At-Bats</h3>
 
@@ -1682,6 +1742,17 @@ function PitchesTab({
           </div>
         </div>
       ))}
+
+      {selected && (
+        <PitcherGameSheet
+          open={sheet?.open ?? false}
+          onClose={closePitcher}
+          abbr={selected.abbr}
+          pitcher={selected.pitcher}
+          units={units}
+          onPlayer={onPlayer}
+        />
+      )}
     </div>
   );
 }
@@ -1692,11 +1763,11 @@ function PitchesTab({
 function PitchUsageCard({
   abbr,
   pitchers,
-  onPlayer,
+  onPitcher,
 }: {
   abbr: string;
   pitchers: BoxPitchingRow[];
-  onPlayer: (id: number) => void;
+  onPitcher: (id: number) => void;
 }) {
   const withUsage = pitchers.filter((p) => p.pitchUsage && p.pitchUsage.length > 0);
   if (withUsage.length === 0) return null;
@@ -1707,24 +1778,47 @@ function PitchUsageCard({
       </div>
       <div className="flex flex-col gap-5">
         {withUsage.map((p) => (
-          <PitcherUsage key={p.id} pitcher={p} onPlayer={onPlayer} />
+          <PitcherUsage key={p.id} pitcher={p} onPitcher={onPitcher} />
         ))}
       </div>
     </div>
   );
 }
 
+interface MixEntry {
+  type: string;
+  count: number;
+  pct: number;
+}
+
+/** Pitch-type counts as ordered shares of a population — most-used first.
+ *  The sheet tallies a filtered subset of pitches; the usage card passes the
+ *  whole game. Both land here so they can't disagree on how a split is read. */
+function mixEntries(counts: Record<string, number>): { entries: MixEntry[]; total: number } {
+  const total = Object.values(counts).reduce((s, n) => s + n, 0);
+  if (total === 0) return { entries: [], total: 0 };
+  const entries = Object.entries(counts)
+    .map(([type, count]) => ({ type, count, pct: Math.round((count / total) * 100) }))
+    .sort((a, b) => b.count - a.count || a.type.localeCompare(b.type));
+  return { entries, total };
+}
+
+/** The whole game's mix for one pitcher, drawn from the boxscore tally. */
+function pitchMix(pitcher: BoxPitchingRow) {
+  const counts: Record<string, number> = {};
+  for (const u of pitcher.pitchUsage ?? []) counts[u.type] = (counts[u.type] ?? 0) + u.count;
+  return mixEntries(counts);
+}
+
 function PitcherUsage({
   pitcher,
-  onPlayer,
+  onPitcher,
 }: {
   pitcher: BoxPitchingRow;
-  onPlayer: (id: number) => void;
+  onPitcher: (id: number) => void;
 }) {
-  const usage = (pitcher.pitchUsage ?? []).slice().sort((a, b) => b.count - a.count);
-  const total = usage.reduce((s, e) => s + e.count, 0);
+  const { entries, total } = pitchMix(pitcher);
   if (total === 0) return null;
-  const entries = usage.map((e) => ({ ...e, pct: Math.round((e.count / total) * 100) }));
 
   return (
     <div>
@@ -1733,7 +1827,8 @@ function PitcherUsage({
           <button
             data-cy="pitcher-usage-name"
             data-cy-player-id={pitcher.id}
-            onClick={() => onPlayer(pitcher.id)}
+            aria-haspopup="dialog"
+            onClick={() => onPitcher(pitcher.id)}
             className="font-head text-[20px] font-bold text-ink tracking-[-0.5px] leading-none bg-transparent border-none cursor-pointer p-0 text-left"
           >
             {pitcher.name}
@@ -1788,6 +1883,430 @@ function PitcherUsage({
         ))}
       </div>
     </div>
+  );
+}
+
+/* ── Pitcher game sheet ───────────────────────────────────────── */
+
+/** Section heading inside the sheet — matches the usage card's rubric. */
+function SheetSection({
+  label,
+  aside,
+  children,
+}: {
+  label: string;
+  aside?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section>
+      <div className="flex items-baseline justify-between gap-2 mb-2.5">
+        <div className="text-[10px] tracking-[1.2px] uppercase text-ink-3 font-bold">{label}</div>
+        {aside && <div className="font-mono text-[11px] text-ink-3">{aside}</div>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** One label/value pair in the sheet's game line. Borrows the player-detail
+ *  table's rubric — grey uppercase key over a bold mono value — so the two
+ *  screens read as the same stat vocabulary. */
+function SheetStat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div data-cy="pitcher-sheet-stat" data-cy-stat={label}>
+      <div className="font-ui text-[10px] font-bold tracking-[1.2px] uppercase text-ink-3">
+        {label}
+      </div>
+      <div className="mt-0.5 font-mono text-[14px] font-semibold text-ink">{value}</div>
+    </div>
+  );
+}
+
+/** Which batters to count: both sides, or one of them. */
+type BatterHand = "all" | "L" | "R";
+
+const HAND_OPTIONS: ReadonlyArray<{ key: BatterHand; label: string }> = [
+  { key: "all", label: "All" },
+  { key: "L", label: "LHB" },
+  { key: "R", label: "RHB" },
+];
+
+/** Segmented control for batter handedness. Same sliding-pill track the Plays
+ *  tab's filter uses, so it reads as a native part of the app. */
+function BatterHandFilter({
+  value,
+  onChange,
+}: {
+  value: BatterHand;
+  onChange: (next: BatterHand) => void;
+}) {
+  const { containerRef, pos } = useSlidingPill(value, 3);
+  return (
+    <div
+      ref={containerRef}
+      data-cy="pitcher-sheet-hand-filter"
+      role="group"
+      aria-label="Batter handedness"
+      className="relative flex items-center gap-1 bg-surface border border-line rounded-full p-1"
+    >
+      <span
+        aria-hidden
+        className="absolute inset-y-1 rounded-full bg-accent pointer-events-none transition-[transform,width] duration-200 ease-out"
+        style={{
+          transform: `translateX(${pos?.left ?? 0}px)`,
+          width: pos?.width ?? 0,
+          opacity: pos ? 1 : 0,
+        }}
+      />
+      {HAND_OPTIONS.map(({ key, label }) => {
+        const on = value === key;
+        return (
+          <button
+            key={key}
+            type="button"
+            data-cy="pitcher-sheet-hand-option"
+            data-cy-hand={key}
+            data-cy-selected={on ? "true" : "false"}
+            data-sliding-key={key}
+            aria-pressed={on}
+            onClick={() => onChange(key)}
+            className={`relative px-2.5 py-0.5 rounded-full border-none bg-transparent cursor-pointer font-ui text-[10px] font-bold uppercase tracking-[0.8px] transition-colors duration-200 ${
+              on ? "text-white" : "text-ink-2"
+            }`}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * The pitch mix as a wrapping row of chips. With `onSelect` they're a
+ * single-select group driving the zone plot; without it they're a plain
+ * readout (the fallback when the feed carries no plate coordinates).
+ */
+function PitchMixChips({
+  entries,
+  selected,
+  onSelect,
+}: {
+  entries: MixEntry[];
+  selected: string | null;
+  onSelect?: (type: string) => void;
+}) {
+  return (
+    <div
+      data-cy="pitcher-sheet-mix"
+      role={onSelect ? "radiogroup" : undefined}
+      aria-label={onSelect ? "Pitch type" : undefined}
+      className="flex flex-wrap gap-1.5"
+    >
+      {entries.map((e) => {
+        const on = onSelect ? e.type === selected : false;
+        const name = PITCH_TYPE_NAMES[e.type] ?? e.type;
+        const body = (
+          <>
+            <span
+              className="w-2 h-2 rounded-full shrink-0 self-center"
+              style={{ background: pitchColor(e.type) }}
+            />
+            <span className="font-mono text-[12px] font-bold text-ink">{e.type}</span>
+            <span className="font-mono text-[12px] text-ink-2">{e.pct}%</span>
+            <span className="font-mono text-[11px] text-ink-3">({e.count})</span>
+          </>
+        );
+        const shell = "inline-flex items-baseline gap-1.5 pl-2 pr-2.5 py-1 rounded-full border";
+        if (!onSelect) {
+          return (
+            <span
+              key={e.type}
+              data-cy="pitcher-sheet-mix-chip"
+              data-cy-type={e.type}
+              title={name}
+              className={`${shell} bg-chip border-transparent`}
+            >
+              {body}
+            </span>
+          );
+        }
+        return (
+          <button
+            key={e.type}
+            type="button"
+            data-cy="pitcher-sheet-mix-chip"
+            data-cy-type={e.type}
+            data-cy-selected={on ? "true" : "false"}
+            role="radio"
+            aria-checked={on}
+            aria-label={`${name}, ${e.count} pitches`}
+            title={name}
+            onClick={() => onSelect(e.type)}
+            className={`${shell} cursor-pointer transition-colors ${
+              on ? "bg-active border-accent" : "bg-chip border-transparent hover:border-line"
+            }`}
+          >
+            {body}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Where one pitch type landed across the whole game. Unlike the at-bat zone
+ * these are plain dots — a starter's fastball is 40 pitches, and velo bubbles
+ * at that density would be unreadable — colored by outcome so the plot carries
+ * a second dimension beyond location.
+ */
+function PitchLocationPlot({
+  pitches,
+  hand,
+  units,
+}: {
+  pitches: PitchLocation[];
+  hand: BatterHand;
+  units: BoxScoreUnits;
+}) {
+  return (
+    <StrikeZoneFrame
+      // Both sides are labeled when nothing is filtered out, with the active
+      // side solid — the markers orient the view rather than claiming a batter.
+      hands={
+        hand === "all"
+          ? [
+              { hand: "R", dim: true },
+              { hand: "L", dim: true },
+            ]
+          : [{ hand }]
+      }
+      handTestId="pitch-plot-hand-marker"
+      // Deliberately no redrawKey: the zone is a fixed backdrop here, and
+      // re-running its draw-on animation every time a chip is toggled would
+      // pull the eye to the chrome instead of the dots that actually changed.
+    >
+      <g data-cy="pitcher-sheet-zone">
+        {pitches.map((p, i) => (
+          <circle
+            key={i}
+            data-cy="pitch-location-dot"
+            data-cy-result={p.result}
+            cx={zoneX(p.x)}
+            cy={zoneY(p.y)}
+            r="5"
+            fill={PITCH_RESULT_COLORS[p.result].fill}
+            fillOpacity={0.85}
+            stroke="var(--color-surface)"
+            strokeWidth="1.25"
+          >
+            <title>
+              {`${formatVelo(p.velo, units).value} ${formatVelo(p.velo, units).label} · ${PITCH_RESULT_COLORS[p.result].label} · vs ${p.batterHand}HB`}
+            </title>
+          </circle>
+        ))}
+      </g>
+    </StrikeZoneFrame>
+  );
+}
+
+/**
+ * Richer read on one pitcher's outing, launched from their name in the Pitches
+ * tab. Everything here is this-game-only except the season ERA in the subtitle;
+ * the player's career/season page is one tap away via the profile link.
+ */
+function PitcherGameSheet({
+  open,
+  onClose,
+  abbr,
+  pitcher,
+  units,
+  onPlayer,
+}: {
+  open: boolean;
+  onClose: () => void;
+  abbr: string;
+  pitcher: BoxPitchingRow;
+  units: BoxScoreUnits;
+  onPlayer: (id: number) => void;
+}) {
+  const gameMix = pitchMix(pitcher);
+  const total = gameMix.total;
+
+  // Locations are what make the zone plot possible; without them the section
+  // degrades to the static readout it was before.
+  const locations = useMemo(() => pitcher.pitchLocations ?? [], [pitcher.pitchLocations]);
+  const [handFilter, setHandFilter] = useState<BatterHand>("all");
+  const [pickedType, setPickedType] = useState<string | null>(null);
+
+  const inHand = useMemo(
+    () =>
+      handFilter === "all"
+        ? locations
+        : locations.filter((l) => l.batterHand === handFilter),
+    [locations, handFilter],
+  );
+
+  // With locations in hand the mix is tallied from the *filtered* population,
+  // so the chips and the plot always describe the same set of pitches. A type
+  // he never threw to this side simply isn't offered.
+  const mix = useMemo(() => {
+    if (locations.length === 0) return gameMix;
+    const counts: Record<string, number> = {};
+    for (const l of inHand) counts[l.type] = (counts[l.type] ?? 0) + 1;
+    return mixEntries(counts);
+    // gameMix is recomputed each render from `pitcher`; depending on it here
+    // would defeat the memo, and it's only read on the no-locations path.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locations.length, inHand, pitcher.pitchUsage]);
+
+  // Resolved at render rather than synced in an effect: when the hand filter
+  // drops the selected type, selection falls back to the most-used remaining
+  // one instead of blanking the plot for a frame.
+  const activeType =
+    pickedType && mix.entries.some((e) => e.type === pickedType)
+      ? pickedType
+      : (mix.entries[0]?.type ?? null);
+
+  const plotted = useMemo(
+    () => (activeType ? inHand.filter((l) => l.type === activeType) : []),
+    [inHand, activeType],
+  );
+
+  const hasMix = locations.length > 0 || gameMix.entries.length > 0;
+
+  // The transform backfills `balls` whenever `strikes` is present, so one guard
+  // covers both columns and the rate derived from them.
+  const strikes = pitcher.strikes;
+  const balls = pitcher.balls;
+  const hasSplit =
+    typeof strikes === "number" && typeof balls === "number" && strikes + balls > 0;
+
+  // Box-score reading order first, then the count work. Anything the feed
+  // hasn't populated drops out rather than showing a placeholder dash.
+  const line: Array<{ label: string; value: string | number }> = [
+    { label: "IP", value: pitcher.ip },
+    { label: "K", value: pitcher.k },
+    { label: "BB", value: pitcher.bb },
+    { label: "P", value: pitcher.pitches ?? total },
+    { label: "H", value: pitcher.h },
+    { label: "R", value: pitcher.r },
+    { label: "ER", value: pitcher.er },
+    { label: "HR", value: pitcher.hr },
+    ...(hasSplit
+      ? [
+        { label: "STR", value: strikes! },
+        { label: "BALL", value: balls! },
+        { label: "STR%", value: `${Math.round((strikes! / (strikes! + balls!)) * 100)}%` },
+      ]
+      : []),
+    ...(typeof pitcher.bf === "number" ? [{ label: "BF", value: pitcher.bf }] : []),
+  ];
+
+  const subtitle = [
+    `${abbr} · Pitching`,
+    `${pitcher.ip} IP`,
+    pitcher.era ? `${pitcher.era} ERA` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      title={pitcher.name}
+      subtitle={subtitle}
+      testId="pitcher-game-sheet"
+    >
+      <div className="px-3.5 md:px-5 py-4 flex flex-col gap-5">
+        <button
+          type="button"
+          data-cy="pitcher-sheet-profile"
+          data-cy-player-id={pitcher.id}
+          onClick={() => {
+            onClose();
+            onPlayer(pitcher.id);
+          }}
+          className="self-start bg-transparent border-none p-0 cursor-pointer font-ui text-[12px] text-ink-2 underline underline-offset-2 decoration-line hover:text-accent transition-colors"
+        >
+          View full player page
+        </button>
+
+        <SheetSection label="This Game">
+          <div data-cy="pitcher-sheet-line" className="grid grid-cols-5 gap-x-2 gap-y-3">
+            {line.map((s) => (
+              <SheetStat key={s.label} label={s.label} value={s.value} />
+            ))}
+          </div>
+        </SheetSection>
+
+        {hasMix && (
+          <SheetSection
+            label="Pitch Mix"
+            aside={
+              locations.length > 0 ? (
+                <BatterHandFilter value={handFilter} onChange={setHandFilter} />
+              ) : (
+                `${mix.entries.length} types`
+              )
+            }
+          >
+            {/* Compact counterpart to the card that opened this sheet: one
+                wrapping row of chips instead of a stacked bar over a
+                two-column legend. With locations to plot the chips double as
+                the plot's type selector; without them they stay a readout. */}
+            <PitchMixChips
+              entries={mix.entries}
+              selected={activeType}
+              onSelect={locations.length > 0 ? setPickedType : undefined}
+            />
+
+            {locations.length > 0 && activeType && (
+              <div className="mt-3.5">
+                <div data-cy="pitcher-sheet-zone-caption" className="text-center mb-1">
+                  <span className="font-head text-[13px] font-bold text-ink tracking-[-0.2px]">
+                    {PITCH_TYPE_NAMES[activeType] ?? activeType}
+                  </span>
+                  <span className="font-mono text-[11px] text-ink-3">
+                    {" · "}
+                    {plotted.length} {plotted.length === 1 ? "pitch" : "pitches"}
+                    {handFilter === "all" ? "" : ` vs ${handFilter}HB`}
+                  </span>
+                </div>
+                <PitchLocationPlot pitches={plotted} hand={handFilter} units={units} />
+                {/* Dots are colored by outcome, so the zone answers "where did
+                    it land, and what happened" in one pass. */}
+                <div className="mt-1 flex flex-wrap justify-center gap-x-3 gap-y-1">
+                  {(["strike", "ball", "foul-2k", "inplay"] as const).map((r) => (
+                    <span key={r} className="inline-flex items-center gap-1.5">
+                      <span
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ background: PITCH_RESULT_COLORS[r].fill }}
+                      />
+                      <span className="font-mono text-[10px] text-ink-3 tracking-[0.4px]">
+                        {PITCH_RESULT_COLORS[r].label}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {locations.length > 0 && !activeType && (
+              <div
+                data-cy="pitcher-sheet-zone-empty"
+                className="mt-3 p-6 text-center text-ink-3 text-[13px]"
+              >
+                No pitches to {handFilter === "L" ? "left" : "right"}-handed batters.
+              </div>
+            )}
+          </SheetSection>
+        )}
+      </div>
+    </BottomSheet>
   );
 }
 

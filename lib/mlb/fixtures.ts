@@ -1,4 +1,112 @@
+import type { BoxPitchingRow, PitchLocation } from "./types";
 import type { GameDetailData } from "./types";
+
+/* ── Synthetic pitch locations ────────────────────────────────────
+ *
+ * A starter throws ~100 pitches, so spelling out every plotted location as a
+ * literal would triple this file for no added fidelity. Instead they're
+ * derived from the row that's already here: the counts come from `pitchUsage`
+ * and the ball/strike split from `balls`/`strikes`, so the fixture can't drift
+ * out of agreement with itself the way two hand-maintained lists would.
+ *
+ * Everything below is seeded off the pitcher's MLB id — same input, same
+ * scatter on every run, which is what Cypress needs.
+ */
+
+/** Mulberry32. Small, seedable, and good enough for scattering dots. */
+function seeded(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Where each pitch type tends to live, in zone coordinates. Fastballs work
+ *  up, breaking and offspeed stuff works down — so toggling between types
+ *  actually moves the cloud, which is the whole point of the plot. */
+const PITCH_TENDENCY: Record<string, { x: number; y: number }> = {
+  FF: { x: 0.0, y: 0.55 },
+  SI: { x: -0.45, y: -0.1 },
+  CT: { x: 0.35, y: 0.15 },
+  SL: { x: 0.55, y: -0.5 },
+  CB: { x: 0.15, y: -0.8 },
+  CH: { x: -0.4, y: -0.6 },
+  FS: { x: -0.1, y: -0.75 },
+};
+
+/**
+ * Expand a pitcher's `pitchUsage` into individual located pitches.
+ *
+ * Results are dealt to match the row's own ball/strike split exactly — note
+ * that a boxscore "strike" is any pitch that isn't a ball, so fouls and balls
+ * in play come out of the strike allotment, not on top of it. Balls are then
+ * placed outside the zone and strikes inside, so the picture agrees with the
+ * numbers printed above it.
+ */
+function locationsFor(row: BoxPitchingRow): PitchLocation[] {
+  const usage = row.pitchUsage ?? [];
+  if (usage.length === 0) return [];
+  const rand = seeded(row.id);
+
+  // One entry per pitch, most-used type first, then shuffled so the results
+  // dealt below don't land in type-ordered blocks.
+  const types: string[] = [];
+  for (const u of usage) for (let i = 0; i < u.count; i++) types.push(u.type);
+  for (let i = types.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [types[i], types[j]] = [types[j], types[i]];
+  }
+
+  const ballBudget = row.balls ?? Math.round(types.length * 0.36);
+  return types.map((type, i): PitchLocation => {
+    const isBall = i < ballBudget;
+    // Of the non-balls: mostly called/swinging strikes, a healthy share of
+    // fouls, and the occasional ball in play.
+    const roll = rand();
+    const result: PitchLocation["result"] = isBall
+      ? "ball"
+      : roll < 0.55
+        ? "strike"
+        : roll < 0.85
+          ? "foul-2k"
+          : "inplay";
+
+    const tend = PITCH_TENDENCY[type] ?? { x: 0, y: 0 };
+    // Gaussian-ish jitter from two uniforms, centered on the type's tendency.
+    const jitter = () => (rand() + rand() - 1) * 0.6;
+    let x = tend.x + jitter();
+    let y = tend.y + jitter();
+    if (isBall) {
+      // Push it clear of the zone on whichever axis it's already closer to
+      // leaving, so misses read as misses rather than borderline calls.
+      if (Math.abs(x) > Math.abs(y)) x = Math.sign(x || 1) * (1.08 + rand() * 0.55);
+      else y = Math.sign(y || -1) * (1.08 + rand() * 0.55);
+    } else {
+      // Keep it honest: a called strike belongs in the zone.
+      x = Math.max(-0.95, Math.min(0.95, x));
+      y = Math.max(-0.95, Math.min(0.95, y));
+    }
+
+    const veloBase = type === "FF" || type === "SI" ? 94 : type === "CT" ? 90 : 85;
+    return {
+      x: Number(Math.max(-1.8, Math.min(1.8, x)).toFixed(2)),
+      y: Number(Math.max(-1.8, Math.min(1.8, y)).toFixed(2)),
+      type,
+      velo: Number((veloBase + rand() * 3 - 1.5).toFixed(1)),
+      // Roughly a 55/45 split of right- and left-handed batters faced.
+      batterHand: rand() < 0.55 ? "R" : "L",
+      result,
+    };
+  });
+}
+
+/** Attach synthetic locations to each pitching row that has a usage breakdown. */
+function withLocations(rows: BoxPitchingRow[]): BoxPitchingRow[] {
+  return rows.map((row) => ({ ...row, pitchLocations: locationsFor(row) }));
+}
 
 /**
  * Hand-built live-game fixture so the UI can be exercised when no real games
@@ -64,12 +172,12 @@ export const FIXTURE_LIVE_GAME: GameDetailData = {
     { id: 502671, name: "B. Stott",     pos: "2B", ab: 3, r: 0, h: 0, rbi: 0, bb: 0, k: 0, avg: ".245" },
     { id: 656555, name: "J. Rojas",     pos: "CF", ab: 3, r: 0, h: 0, rbi: 0, bb: 0, k: 1, avg: ".208" },
   ],
-  awayPitching: [
+  awayPitching: withLocations([
     {
       id: 605135,
       name: "Kodai Senga",
       ip: "5.2", h: 5, r: 2, er: 2, bb: 2, k: 7, hr: 0,
-      era: "3.18", pitches: 92, live: true,
+      era: "3.18", pitches: 92, strikes: 59, balls: 33, bf: 24, live: true,
       pitchUsage: [
         { type: "FS", count: 26 },
         { type: "FF", count: 24 },
@@ -79,13 +187,13 @@ export const FIXTURE_LIVE_GAME: GameDetailData = {
         { type: "SI", count: 5 },
       ],
     },
-  ],
-  homePitching: [
+  ]),
+  homePitching: withLocations([
     {
       id: 554430,
       name: "Zack Wheeler",
       ip: "6.0", h: 6, r: 3, er: 3, bb: 2, k: 6, hr: 0,
-      era: "3.45", pitches: 101,
+      era: "3.45", pitches: 101, strikes: 66, balls: 35, bf: 25,
       pitchUsage: [
         { type: "FF", count: 41 },
         { type: "SI", count: 19 },
@@ -99,7 +207,7 @@ export const FIXTURE_LIVE_GAME: GameDetailData = {
       id: 669373,
       name: "Matt Strahm",
       ip: "0.1", h: 2, r: 1, er: 1, bb: 0, k: 1, hr: 0,
-      era: "2.81", pitches: 13, live: true,
+      era: "2.81", pitches: 13, strikes: 8, balls: 5, bf: 4, live: true,
       pitchUsage: [
         { type: "FF", count: 6 },
         { type: "SL", count: 4 },
@@ -107,7 +215,7 @@ export const FIXTURE_LIVE_GAME: GameDetailData = {
         { type: "CH", count: 1 },
       ],
     },
-  ],
+  ]),
   plays: [
     {
       half: "TOP 7",

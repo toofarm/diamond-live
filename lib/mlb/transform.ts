@@ -18,6 +18,7 @@ import type {
   Linescore,
   PersonnelRow,
   Pitch,
+  PitchLocation,
   PitcherRef,
   Play,
   PlayerCareerTotals,
@@ -403,6 +404,16 @@ function mapBoxPitching(side: any): BoxPitchingRow[] {
     const p = players[`ID${id}`];
     if (!p) continue;
     const stats = p?.stats?.pitching ?? {};
+    const pitches: number | undefined = stats.numberOfPitches ?? undefined;
+    const strikes: number | undefined = stats.strikes ?? undefined;
+    // `balls` is the one half of the split the boxscore sometimes omits, and
+    // it's the complement of a field we already have — so back it out rather
+    // than dropping the whole ball/strike mix for want of one number.
+    const balls: number | undefined =
+      stats.balls ??
+      (typeof pitches === "number" && typeof strikes === "number"
+        ? Math.max(0, pitches - strikes)
+        : undefined);
     rows.push({
       id: p?.person?.id ?? 0,
       name: p?.person?.fullName ?? "—",
@@ -414,10 +425,55 @@ function mapBoxPitching(side: any): BoxPitchingRow[] {
       k: stats.strikeOuts ?? 0,
       hr: stats.homeRuns ?? 0,
       era: p?.seasonStats?.pitching?.era ?? "",
-      pitches: stats.numberOfPitches ?? undefined,
+      pitches,
+      strikes,
+      balls,
+      bf: stats.battersFaced ?? undefined,
     });
   }
   return rows;
+}
+
+/**
+ * Normalize a pitch event's plate coordinates into the UI's zone space, where
+ * the strike-zone interior is -1..1 and the drawable canvas -1.8..1.8.
+ *
+ * statsapi `pX` is in feet, roughly -1.5..1.5 (zone half-width ~0.83 ft). `pZ`
+ * runs ~1.5 (low strike) to ~3.5 (high strike) and is recentered on this
+ * batter's own zone, since szTop/szBot vary by stance and height.
+ *
+ * Returns null when the event carries no coordinates — callers decide whether
+ * to drop the pitch or plot it at the origin.
+ */
+function pitchCoords(ev: any): { x: number; y: number } | null {
+  const coords = ev?.pitchData?.coordinates ?? {};
+  if (typeof coords.pX !== "number" || typeof coords.pZ !== "number") return null;
+  const szTop =
+    typeof ev?.pitchData?.strikeZoneTop === "number" ? ev.pitchData.strikeZoneTop : 3.4;
+  const szBot =
+    typeof ev?.pitchData?.strikeZoneBottom === "number" ? ev.pitchData.strikeZoneBottom : 1.6;
+  const mid = (szTop + szBot) / 2;
+  const half = (szTop - szBot) / 2 || 1;
+  const clamp = (n: number) => Math.max(-1.8, Math.min(1.8, n));
+  return { x: clamp(coords.pX / 0.85), y: clamp((coords.pZ - mid) / half) };
+}
+
+/** Classify a pitch event into the four buckets the zone plots color by. */
+function pitchResult(ev: any): Pitch["result"] {
+  const callCode = ev?.details?.code ?? "";
+  const desc: string = ev?.details?.description ?? "";
+  let result: Pitch["result"] = "ball";
+  if (ev?.details?.isStrike) result = "strike";
+  if (ev?.details?.isInPlay) result = "inplay";
+  if (callCode === "F" || callCode === "FT" || /foul/i.test(desc)) result = "foul-2k";
+  return result;
+}
+
+/** Pitch speed in mph, rounded to one decimal. 0 when the feed omits it. */
+function pitchVelo(ev: any): number {
+  return typeof ev?.pitchData?.startSpeed === "number"
+    ? Number(ev.pitchData.startSpeed.toFixed(1))
+    : 0;
 }
 
 /** Build an AtBat snapshot from the current plate-appearance play (if game is live).
@@ -450,48 +506,17 @@ function mapAtBat(feed: any): AtBat | null {
   if (pitchEvents.length === 0) return null;
 
   const pitches: Pitch[] = pitchEvents.map((e: any, i: number): Pitch => {
-    const coords = e?.pitchData?.coordinates ?? {};
-    // statsapi pX is in feet, roughly -1.5..1.5 (zone half-width ~0.83 ft).
-    // pZ ranges from ~1.5 (low strike) to ~3.5 (high strike). We map to UI's
-    // [-1, 1] zone interior and [-1.8, 1.8] outer canvas.
-    const px =
-      typeof coords.pX === "number"
-        ? Math.max(-1.8, Math.min(1.8, coords.pX / 0.85))
-        : 0;
-    // Center zone vertically at midpoint of szTop/szBot if provided; else default mid ~2.5 ft.
-    const szTop =
-      typeof e?.pitchData?.strikeZoneTop === "number"
-        ? e.pitchData.strikeZoneTop
-        : 3.4;
-    const szBot =
-      typeof e?.pitchData?.strikeZoneBottom === "number"
-        ? e.pitchData.strikeZoneBottom
-        : 1.6;
-    const mid = (szTop + szBot) / 2;
-    const half = (szTop - szBot) / 2 || 1;
-    const py =
-      typeof coords.pZ === "number"
-        ? Math.max(-1.8, Math.min(1.8, (coords.pZ - mid) / half))
-        : 0;
-
-    const callCode = e?.details?.code ?? "";
+    // An at-bat plots every pitch it has, so a missing location falls back to
+    // dead center rather than dropping the pitch out of the sequence.
+    const { x, y } = pitchCoords(e) ?? { x: 0, y: 0 };
     const desc: string = e?.details?.description ?? "";
-    let result: Pitch["result"] = "ball";
-    if (e?.details?.isStrike) result = "strike";
-    if (e?.details?.isInPlay) result = "inplay";
-    if (callCode === "F" || callCode === "FT" || /foul/i.test(desc))
-      result = "foul-2k";
-
     return {
       n: i + 1,
       type: e?.details?.type?.code ?? "",
-      velo:
-        typeof e?.pitchData?.startSpeed === "number"
-          ? Number(e.pitchData.startSpeed.toFixed(1))
-          : 0,
-      x: px,
-      y: py,
-      result,
+      velo: pitchVelo(e),
+      x,
+      y,
+      result: pitchResult(e),
       label: desc || "Pitch",
     };
   });
@@ -632,16 +657,16 @@ export function mapGameDetail(
   const awayLineup = mapBoxLineup(box?.teams?.away);
   const homeLineup = mapBoxLineup(box?.teams?.home);
   const allPlays = (live?.plays?.allPlays ?? []) as any[];
-  const usageByPitcher = computePitchUsageByPitcher(allPlays);
+  const pitchDataByPitcher = computePitchDataByPitcher(allPlays);
   const gameIsLive = status === "LIVE";
   const awayPitching = decoratePitching(
     mapBoxPitching(box?.teams?.away),
-    usageByPitcher,
+    pitchDataByPitcher,
     gameIsLive,
   );
   const homePitching = decoratePitching(
     mapBoxPitching(box?.teams?.home),
-    usageByPitcher,
+    pitchDataByPitcher,
     gameIsLive,
   );
 
@@ -825,26 +850,53 @@ function computeBatterSprays(
   });
 }
 
+/** What one pass over the plays yields for a single pitcher. */
+interface PitcherPitchData {
+  /** Pitch-type code → how many of them he threw. */
+  counts: Record<string, number>;
+  /** The subset of those pitches the feed located in the zone. */
+  locations: PitchLocation[];
+}
+
 /**
- * Walk every plate appearance and tally pitch-type counts per pitcher. Returns
- * a map keyed by pitcher player id → { typeCode: count }. Pitches without a
- * recognizable type code are skipped (intentional pitches, pickoffs, etc.).
+ * Walk every plate appearance once and collect, per pitcher, both the
+ * pitch-type tally and the located pitches. Returns a map keyed by pitcher
+ * player id. Pitches without a recognizable type code are skipped entirely
+ * (intentional pitches, pickoffs, etc.); pitches with a type but no plate
+ * coordinates are counted but not located, which is why the two halves can
+ * disagree by a few.
  */
-function computePitchUsageByPitcher(
-  allPlays: any[],
-): Map<number, Record<string, number>> {
-  const out = new Map<number, Record<string, number>>();
+function computePitchDataByPitcher(allPlays: any[]): Map<number, PitcherPitchData> {
+  const out = new Map<number, PitcherPitchData>();
   for (const p of allPlays) {
     const pitcherId = p?.matchup?.pitcher?.id;
     if (typeof pitcherId !== "number") continue;
+    // batSide is the side the batter actually hit from in this plate
+    // appearance, which is what a switch hitter makes meaningful.
+    const side = p?.matchup?.batSide?.code;
+    const batterHand: "L" | "R" | null = side === "L" || side === "R" ? side : null;
     const events = (p?.playEvents ?? []) as any[];
     for (const ev of events) {
       if (!ev?.isPitch) continue;
       const code = ev?.details?.type?.code;
       if (typeof code !== "string" || code.length === 0) continue;
-      const counts = out.get(pitcherId) ?? {};
-      counts[code] = (counts[code] ?? 0) + 1;
-      out.set(pitcherId, counts);
+      const entry = out.get(pitcherId) ?? { counts: {}, locations: [] };
+      entry.counts[code] = (entry.counts[code] ?? 0) + 1;
+      const coords = pitchCoords(ev);
+      if (coords && batterHand) {
+        entry.locations.push({
+          // Two decimals is finer than the plot can render and keeps ~100
+          // pitches per starter from bloating a payload that re-polls on a
+          // 10s cadence.
+          x: Number(coords.x.toFixed(2)),
+          y: Number(coords.y.toFixed(2)),
+          type: code,
+          velo: pitchVelo(ev),
+          result: pitchResult(ev),
+          batterHand,
+        });
+      }
+      out.set(pitcherId, entry);
     }
   }
   return out;
@@ -858,17 +910,19 @@ function computePitchUsageByPitcher(
  */
 function decoratePitching(
   rows: import("./types").BoxPitchingRow[],
-  usageByPitcher: Map<number, Record<string, number>>,
+  pitchDataByPitcher: Map<number, PitcherPitchData>,
   gameIsLive: boolean,
 ): import("./types").BoxPitchingRow[] {
   if (rows.length === 0) return rows;
   return rows.map((row, i) => {
-    const counts = usageByPitcher.get(row.id);
-    const pitchUsage = counts
-      ? Object.entries(counts).map(([type, count]) => ({ type, count }))
+    const entry = pitchDataByPitcher.get(row.id);
+    const pitchUsage = entry
+      ? Object.entries(entry.counts).map(([type, count]) => ({ type, count }))
       : undefined;
+    const pitchLocations =
+      entry && entry.locations.length > 0 ? entry.locations : undefined;
     const live = gameIsLive && i === rows.length - 1 ? true : undefined;
-    return { ...row, pitchUsage, live };
+    return { ...row, pitchUsage, pitchLocations, live };
   });
 }
 

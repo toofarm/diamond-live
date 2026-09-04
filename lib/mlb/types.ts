@@ -82,6 +82,25 @@ export interface PitchUsageEntry {
   count: number;
 }
 
+/**
+ * One pitch a pitcher threw in this game, located in the strike zone. Shares
+ * `Pitch`'s normalized coordinate space (zone interior is -1..1, canvas
+ * -1.8..1.8) so the same zone geometry plots both. Deliberately leaner than
+ * `Pitch` — no sequence number or description — because a starter contributes
+ * ~100 of these to a payload that re-polls every 10s.
+ */
+export interface PitchLocation {
+  x: number;
+  y: number;
+  /** Pitch type code, e.g. 'FF'. Matches `PitchUsageEntry.type`. */
+  type: string;
+  velo: number;
+  result: Pitch["result"];
+  /** Side the batter hit from in this plate appearance — so a switch hitter
+   *  contributes to whichever side they actually took the pitch from. */
+  batterHand: "L" | "R";
+}
+
 export interface BoxPitchingRow {
   id: number;
   name: string;
@@ -89,8 +108,20 @@ export interface BoxPitchingRow {
   h: number; r: number; er: number; bb: number; k: number; hr: number;
   era?: string;
   pitches?: number;
+  /** Strikes thrown this game. Sums with `balls` to `pitches`. */
+  strikes?: number;
+  /** Balls thrown this game. Derived from `pitches - strikes` when the
+   *  boxscore omits it, so it's present whenever `strikes` is. */
+  balls?: number;
+  /** Batters faced this game. */
+  bf?: number;
   /** Counts by pitch type for this pitcher in the current game. */
   pitchUsage?: PitchUsageEntry[];
+  /** Every located pitch this pitcher threw in this game. Omitted when the
+   *  feed carries no coordinates. A pitch missing coordinates is left out of
+   *  this list but still counted in `pitchUsage`, so the two can differ by a
+   *  few — anything reading both should pick one as its source of truth. */
+  pitchLocations?: PitchLocation[];
   /** True when this pitcher is the most recent / currently-active arm for the team. */
   live?: boolean;
 }
