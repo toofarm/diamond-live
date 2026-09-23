@@ -15,6 +15,7 @@ function GamePageInner() {
       onBack={() => smartBack(router, "/scores")}
       onPlayer={(pid) => router.push(`/player/${pid}`)}
       onTeam={(abbr) => router.push(`/team/${abbr}`)}
+      onGame={(gid) => router.push(`/game/${gid}`)}
     />
   );
 }
