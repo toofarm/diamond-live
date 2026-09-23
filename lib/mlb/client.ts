@@ -322,11 +322,22 @@ export function useIsClient(): boolean {
  */
 const inflight = new Map<string, Promise<unknown>>();
 
+/**
+ * Upper bound on a single request. Coalescing makes a request that never
+ * settles far worse than a slow one: its `inflight` entry is only dropped on
+ * settle, so every later poll, visibility refetch, and `refresh()` for that URL
+ * would be handed the same dead promise until a full reload. iOS can produce
+ * exactly that by freezing the page with a fetch on the wire. The timeout turns
+ * a hang into an ordinary failure, which `useApiResource` already handles by
+ * keeping the last good payload on screen.
+ */
+const REQUEST_TIMEOUT_MS = 15_000;
+
 function sharedRequest<T>(url: string): Promise<T> {
   const hit = inflight.get(url);
   if (hit) return hit as Promise<T>;
 
-  const p = fetch(url, { cache: "no-store" })
+  const p = fetch(url, { cache: "no-store", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
     .then(async (res) => {
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       return (await res.json()) as T;

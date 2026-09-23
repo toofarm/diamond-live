@@ -1,0 +1,12 @@
+{
+  "season": 2026,
+  "games": [
+    { "id": 9001, "dateISO": "2026-04-10", "time": "2026-04-10T23:10:00Z", "status": "FINAL", "away": "PHI", "home": "NYM", "awayScore": 3, "homeScore": 5 },
+    { "id": 9002, "dateISO": "2026-04-11", "time": "2026-04-11T23:10:00Z", "status": "FINAL", "away": "PHI", "home": "NYM", "awayScore": 6, "homeScore": 2 },
+    { "id": 9003, "dateISO": "2026-04-12", "time": "2026-04-12T17:40:00Z", "status": "POSTPONED", "away": "PHI", "home": "NYM" },
+    { "id": 9004, "dateISO": "2026-05-10", "time": "2026-05-10T23:05:00Z", "status": "FINAL", "away": "NYM", "home": "PHI", "awayScore": 7, "homeScore": 4 },
+    { "id": 9005, "dateISO": "2026-05-11", "time": "2026-05-11T23:05:00Z", "status": "FINAL", "away": "NYM", "home": "PHI", "awayScore": 1, "homeScore": 0 },
+    { "id": 1, "dateISO": "2026-05-12", "time": "2026-05-12T23:05:00Z", "status": "SCHEDULED", "away": "NYM", "home": "PHI" },
+    { "id": 9006, "dateISO": "2026-08-20", "time": "2026-08-20T23:10:00Z", "status": "SCHEDULED", "away": "PHI", "home": "NYM" }
+  ]
+}

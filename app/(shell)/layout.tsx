@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   useUser,
@@ -181,9 +181,9 @@ export default function ShellLayout({ children }: { children: React.ReactNode })
   // rasters back into the parent (invisibly) and resets the resting state so
   // the next nav's `none → layer` transition is again a real invalidation.
   const mainRef = useRef<HTMLElement>(null);
-  useEffect(() => {
+  const forceRepaint = useCallback(() => {
     const el = mainRef.current;
-    if (!el) return;
+    if (!el) return () => {};
     el.style.transform = "translateZ(0)";
     // Force a synchronous style/layout flush so the promotion (and its raster)
     // lands now instead of being coalesced away by the clear below.
@@ -192,7 +192,29 @@ export default function ShellLayout({ children }: { children: React.ReactNode })
       el.style.transform = "";
     });
     return () => cancelAnimationFrame(raf);
-  }, [pathname]);
+  }, []);
+  useEffect(() => forceRepaint(), [pathname, forceRepaint]);
+
+  // Same repaint on return from the background. iOS discards the backing
+  // stores of composited layers while Safari is backgrounded, and the rebuild
+  // on resume races the visibility refetches on /scores and /game swapping
+  // content in. `pageshow` covers a restore from the back/forward cache, which
+  // doesn't always fire `visibilitychange`.
+  useEffect(() => {
+    let cancel: () => void = () => {};
+    const onResume = () => {
+      if (document.visibilityState !== "visible") return;
+      cancel();
+      cancel = forceRepaint();
+    };
+    document.addEventListener("visibilitychange", onResume);
+    window.addEventListener("pageshow", onResume);
+    return () => {
+      cancel();
+      document.removeEventListener("visibilitychange", onResume);
+      window.removeEventListener("pageshow", onResume);
+    };
+  }, [forceRepaint]);
 
   /** Auth-aware write. Authenticated users go through the `upsert_profile`
    *  RPC (which also refreshes the auth snapshot so the in-memory profile

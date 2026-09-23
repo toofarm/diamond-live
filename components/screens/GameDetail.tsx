@@ -11,7 +11,7 @@ import {
   useState,
 } from "react";
 import { area as d3Area, curveMonotoneX, line as d3Line, scaleLinear } from "d3";
-import { useApiResource, useIsClient, type ApiResource } from "@/lib/mlb/client";
+import { useApi, useApiResource, useIsClient, type ApiResource } from "@/lib/mlb/client";
 import type {
   AtBat,
   BatterSpray,
@@ -19,11 +19,13 @@ import type {
   BoxPitchingRow,
   GameDecisions,
   GameDetailData,
+  GameSummary,
   Pitch,
   PitchLocation,
   PitcherRef,
   Play,
   ProbableStarters,
+  SeasonSeriesData,
   SprayOutcome,
   SprayPoint,
   TeamRecord,
@@ -35,7 +37,8 @@ import { BackChevron, TeamBadge, BaseDiamond, Loader, OutDots } from "@/componen
 import { IconRefresh } from "@/components/ui/icons";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { DEFAULT_PREFS, useUser, type BoxScoreUnits } from "@/lib/storage";
-import { formatLocalTime } from "@/lib/date";
+import { formatDateLabel, formatLocalTime } from "@/lib/date";
+import { seriesHeadline, summarizeSeries, type SeriesRow } from "@/lib/mlb/seasonSeries";
 import { useTitle } from "@/lib/title";
 import { useTabParam } from "@/lib/mlb/queryParams";
 import { sendToDataLayer, events } from "@/lib/analytics";
@@ -109,11 +112,13 @@ export function GameDetail({
   onBack,
   onPlayer,
   onTeam,
+  onGame,
 }: {
   gameId: number;
   onBack: () => void;
   onPlayer: (id: number) => void;
   onTeam: (abbr: string) => void;
+  onGame: (id: number) => void;
 }) {
   // The live feed is fetched on the client only — see `useIsClient`. The server
   // pass renders the same header-plus-spinner the boundary falls back to, so
@@ -128,6 +133,7 @@ export function GameDetail({
           onBack={onBack}
           onPlayer={onPlayer}
           onTeam={onTeam}
+          onGame={onGame}
         />
       ) : (
         <GameDetailPending onBack={onBack} />
@@ -146,11 +152,13 @@ function GameDetailLoader({
   onBack,
   onPlayer,
   onTeam,
+  onGame,
 }: {
   gameId: number;
   onBack: () => void;
   onPlayer: (id: number) => void;
   onTeam: (abbr: string) => void;
+  onGame: (id: number) => void;
 }) {
   // Freshness over everything: `useApiResource` has no cache tier at all, so
   // this mount goes to the network and so does every poll. `refreshOnVisible`
@@ -179,6 +187,7 @@ function GameDetailLoader({
         generation={generation}
         onPlayer={onPlayer}
         onTeam={onTeam}
+        onGame={onGame}
         onBack={onBack}
       />
     </Suspense>
@@ -211,6 +220,7 @@ function GameDetailBody({
   onBack,
   onPlayer,
   onTeam,
+  onGame,
 }: {
   resource: ApiResource<GameDetailData>;
   refresh: () => void;
@@ -219,6 +229,7 @@ function GameDetailBody({
   onBack: () => void;
   onPlayer: (id: number) => void;
   onTeam: (abbr: string) => void;
+  onGame: (id: number) => void;
 }) {
   // Suspends until the request settles. A failed request resolves to the last
   // good payload plus an `error`, so a dropped poll leaves the box score up
@@ -471,6 +482,7 @@ function GameDetailBody({
             <SummaryTab
               data={data}
               onPlayer={onPlayer}
+              onGame={onGame}
               units={prefs.boxScoreUnits}
               showWinProbability={prefs.winProbability}
             />
@@ -707,11 +719,13 @@ function ProbablePitcher({
 function SummaryTab({
   data,
   onPlayer,
+  onGame,
   units,
   showWinProbability,
 }: {
   data: GameDetailData;
   onPlayer: (id: number) => void;
+  onGame: (id: number) => void;
   units: BoxScoreUnits;
   showWinProbability: boolean;
 }) {
@@ -790,6 +804,8 @@ function SummaryTab({
         />
       )}
 
+      <SeasonSeriesCard summary={summary} onGame={onGame} />
+
       {showWinProbability && winProbability && (
         <WinProbabilityCard
           away={summary.away}
@@ -835,6 +851,313 @@ function SummaryTab({
         </div>
       )}
     </div>
+  );
+}
+
+/* ── Season series card ───────────────────────────────────────── */
+
+/** How many completed meetings the card previews before the sheet CTA. */
+const SERIES_PREVIEW_ROWS = 3;
+const SERIES_CARD_COLS = "52px 1fr 64px";
+const SERIES_SHEET_COLS = "52px 1fr 64px 44px";
+
+/**
+ * Head-to-head record for the season, with the full list in a sheet.
+ *
+ * Fetched here with `useApi`, deliberately outside the suspending
+ * `useApiResource` that owns the live feed: the series only changes when a game
+ * ends, so it rides a 5-minute cache instead of the 10s poll, and a slow or
+ * failed request just leaves the card out rather than holding up the view.
+ * The live game's own row is overlaid from `summary` (see `summarizeSeries`),
+ * so the tally still moves the moment the hero flips to FINAL.
+ */
+function SeasonSeriesCard({
+  summary,
+  onGame,
+}: {
+  summary: GameSummary;
+  onGame: (id: number) => void;
+}) {
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const season = summary.dateISO.slice(0, 4);
+  // Sorted so both teams' home games share one cached response.
+  const teams = [summary.away, summary.home].sort().join(",");
+  const { data } = useApi<SeasonSeriesData>(
+    summary.away && summary.home ? `/api/mlb/series?teams=${teams}&season=${season}` : null,
+    { cacheMs: 300_000 },
+  );
+
+  const series = useMemo(
+    () => (data ? summarizeSeries(data.games, summary) : null),
+    [data, summary],
+  );
+  if (!series || series.rows.length === 0) return null;
+
+  const { wins, runs, played, remaining } = series;
+  const awayColor = TEAMS[summary.away]?.primary ?? "var(--color-accent)";
+  const homeColor = TEAMS[summary.home]?.primary ?? "var(--color-ink-2)";
+  const awayShare = played > 0 ? (wins.away / Math.max(wins.away + wins.home, 1)) * 100 : 50;
+
+  // The game on screen is already the whole page — preview the meetings before it.
+  const preview = series.rows
+    .filter((r) => r.tally && !r.isCurrent)
+    .slice(-SERIES_PREVIEW_ROWS)
+    .reverse();
+
+  const meta = [
+    remaining > 0 ? `${remaining} remaining` : null,
+    played > 0 ? `Runs ${runs.away}–${runs.home}` : null,
+  ].filter(Boolean);
+
+  const openSheet = () => {
+    sendToDataLayer({ event: events.VIEW_SEASON_SERIES, target: teams });
+    setSheetOpen(true);
+  };
+
+  return (
+    <div data-cy="season-series" className="bg-surface border border-line rounded-[14px] overflow-hidden">
+      <div className="p-3.5">
+        <div className="flex items-baseline mb-3">
+          <div className="text-[10px] tracking-[1.2px] uppercase text-ink-3 font-bold">
+            Season Series
+          </div>
+          <div className="flex-1" />
+          <div className="font-mono text-[10px] text-ink-3 tracking-[0.4px]">{season}</div>
+        </div>
+
+        <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-1.5">
+            <TeamBadge abbr={summary.away} size={22} />
+            <span
+              data-cy="season-series-wins"
+              data-cy-side="away"
+              className="font-mono text-[15px] font-bold text-ink tracking-[-0.3px]"
+            >
+              {wins.away}
+            </span>
+          </div>
+          <div
+            className="flex-1 flex h-1.5 rounded-full overflow-hidden bg-line-2"
+            aria-hidden
+          >
+            {played > 0 && (
+              <>
+                <div style={{ width: `${awayShare}%`, background: awayColor }} />
+                <div style={{ width: `${100 - awayShare}%`, background: homeColor }} />
+              </>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 flex-row-reverse">
+            <TeamBadge abbr={summary.home} size={22} />
+            <span
+              data-cy="season-series-wins"
+              data-cy-side="home"
+              className="font-mono text-[15px] font-bold text-ink tracking-[-0.3px]"
+            >
+              {wins.home}
+            </span>
+          </div>
+        </div>
+
+        <div className="mt-2.5 flex flex-wrap items-baseline gap-x-2">
+          <span data-cy="season-series-headline" className="font-head text-[14px] font-semibold text-ink tracking-[-0.2px]">
+            {seriesHeadline(series)}
+          </span>
+          {meta.length > 0 && (
+            <span data-cy="season-series-meta" className="font-mono text-[11px] text-ink-3 tracking-[0.4px]">
+              {meta.join(" · ")}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {preview.length > 0 && (
+        <div className="border-t border-line-2 divide-y divide-line-2">
+          {preview.map((row) => (
+            <SeriesGameRow
+              key={row.game.id}
+              row={row}
+              cols={SERIES_CARD_COLS}
+              testId="season-series-row"
+              onGame={onGame}
+            />
+          ))}
+        </div>
+      )}
+
+      <div className="border-t border-line-2">
+        <button
+          data-cy="season-series-view-all"
+          onClick={openSheet}
+          className="w-full flex items-center justify-center gap-1.5 px-3.5 py-3 bg-transparent border-none cursor-pointer font-ui text-[12px] font-bold tracking-[0.6px] uppercase text-accent hover:bg-active transition-colors"
+        >
+          View all {series.rows.length} games
+        </button>
+      </div>
+
+      <SeasonSeriesSheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        summary={summary}
+        season={season}
+        series={series}
+        onGame={(id) => {
+          setSheetOpen(false);
+          onGame(id);
+        }}
+      />
+    </div>
+  );
+}
+
+/** Every meeting, played and unplayed, oldest first — the season reads top to
+ *  bottom toward the games still to come. The data is already in hand from the
+ *  card, so opening the sheet costs no request. */
+function SeasonSeriesSheet({
+  open,
+  onClose,
+  summary,
+  season,
+  series,
+  onGame,
+}: {
+  open: boolean;
+  onClose: () => void;
+  summary: GameSummary;
+  season: string;
+  series: ReturnType<typeof summarizeSeries>;
+  onGame: (id: number) => void;
+}) {
+  const away = TEAMS[summary.away];
+  const home = TEAMS[summary.home];
+  const title = away && home ? `${away.name} vs ${home.name}` : `${summary.away} vs ${summary.home}`;
+
+  return (
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      title={title}
+      subtitle={`${season} Season Series · ${seriesHeadline(series)}`}
+      testId="season-series-sheet"
+    >
+      <div
+        className="sticky top-0 z-10 grid items-center gap-2 px-3.5 md:px-4 py-2 bg-surface-2 font-mono text-[10px] font-bold tracking-[1.2px] uppercase text-ink-3 border-b border-line-2"
+        style={{ gridTemplateColumns: SERIES_SHEET_COLS }}
+      >
+        <div>Date</div>
+        <div>Matchup</div>
+        <div className="text-right">Score</div>
+        <div className="text-right" title={`Series, ${summary.away}–${summary.home}`}>
+          Ser
+        </div>
+      </div>
+      {series.rows.map((row, i) => {
+        const prev = series.rows[i - 1]?.game.dateISO;
+        const month = formatDateLabel(row.game.dateISO).mo;
+        const newMonth = !prev || formatDateLabel(prev).mo !== month;
+        return (
+          <div key={row.game.id}>
+            {newMonth && (
+              <div
+                data-cy="season-series-month"
+                className="px-3.5 md:px-4 py-1.5 bg-surface font-mono text-[10px] font-bold tracking-[1.4px] uppercase text-ink-3 border-b border-line-2"
+              >
+                {month}
+              </div>
+            )}
+            <div className={i !== series.rows.length - 1 ? "border-b border-line-2" : ""}>
+              <SeriesGameRow
+                row={row}
+                cols={SERIES_SHEET_COLS}
+                testId="season-series-sheet-row"
+                showTally
+                onGame={onGame}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </BottomSheet>
+  );
+}
+
+/** One meeting. Neutral away-@-home framing (TeamDetail's `GameRow` is written
+ *  from one team's side), with the winner's abbr at full ink. The current game
+ *  and postponed games aren't links — there's nowhere new to go. */
+function SeriesGameRow({
+  row,
+  cols,
+  testId,
+  showTally = false,
+  onGame,
+}: {
+  row: SeriesRow;
+  cols: string;
+  testId: string;
+  showTally?: boolean;
+  onGame: (id: number) => void;
+}) {
+  const { game, isCurrent, tally } = row;
+  const { mo, dom } = formatDateLabel(game.dateISO);
+  const scored = game.awayScore != null && game.homeScore != null;
+  const final = game.status === "FINAL" && scored;
+  const awayWon = final && game.awayScore! > game.homeScore!;
+  const homeWon = final && game.homeScore! > game.awayScore!;
+  const clickable = !isCurrent && game.status !== "POSTPONED";
+
+  const result =
+    game.status === "POSTPONED" ? (
+      <span className="text-ink-3">PPD</span>
+    ) : game.status === "LIVE" ? (
+      <span className="text-accent font-bold">
+        {scored ? `${game.awayScore}–${game.homeScore}` : "LIVE"}
+      </span>
+    ) : final ? (
+      `${game.awayScore}–${game.homeScore}`
+    ) : (
+      <span className="text-ink-3">{formatLocalTime(game.time) ?? "TBD"}</span>
+    );
+
+  const Tag = clickable ? "button" : "div";
+  return (
+    <Tag
+      data-cy={testId}
+      data-cy-game-id={game.id}
+      data-cy-status={game.status}
+      aria-current={isCurrent ? "true" : undefined}
+      onClick={clickable ? () => onGame(game.id) : undefined}
+      className={`w-full grid items-center gap-2 px-3.5 md:px-4 py-2.5 bg-transparent border-none text-left ${clickable ? "cursor-pointer hover:bg-active" : ""
+        } ${isCurrent ? "bg-active" : ""}`}
+      style={{ gridTemplateColumns: cols }}
+    >
+      <span className="font-mono text-[12px] text-ink-2">
+        {mo} {dom}
+      </span>
+      <div className="flex items-center gap-1.5 min-w-0">
+        <TeamBadge abbr={game.away} size={18} />
+        <span className={`font-head text-[13px] tracking-[-0.2px] ${awayWon ? "font-bold text-ink" : "font-semibold text-ink-3"}`}>
+          {game.away}
+        </span>
+        <span className="font-mono text-[11px] text-ink-3">@</span>
+        <TeamBadge abbr={game.home} size={18} />
+        <span className={`font-head text-[13px] tracking-[-0.2px] ${homeWon ? "font-bold text-ink" : "font-semibold text-ink-3"}`}>
+          {game.home}
+        </span>
+        {isCurrent && (
+          <span className="ml-1 font-mono text-[9px] font-bold tracking-[1px] uppercase text-accent shrink-0">
+            This game
+          </span>
+        )}
+      </div>
+      <span className="font-mono text-[13px] font-semibold text-ink text-right tracking-[-0.2px]">
+        {result}
+      </span>
+      {showTally && (
+        <span className="font-mono text-[11px] text-ink-3 text-right tracking-[-0.2px]">
+          {tally ? `${tally.away}–${tally.home}` : ""}
+        </span>
+      )}
+    </Tag>
   );
 }
 
@@ -1585,7 +1908,7 @@ function BoxSection({
 /* ── Plays tab ────────────────────────────────────────────────── */
 
 function PlaysTab({ plays }: { plays: Play[] }) {
-  const [scoringOnly, setScoringOnly] = useState(false);
+  const [scoringOnly, setScoringOnly] = useState(true);
   // Slide the indicator between All/Scoring rather than toggling each pill's
   // own background. The key matches the `data-sliding-key` on each button;
   // paddingOffset (3) matches the `p-1` track — same value Leaders uses.

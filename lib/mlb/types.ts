@@ -353,6 +353,29 @@ export interface TeamGamesData {
   games: TeamLastGame[];
 }
 
+/** One regular-season meeting between two teams, from a neutral (away/home)
+ *  perspective rather than TeamLastGame's "us vs. them". Every status is kept
+ *  so the season-series card can count games still to play. */
+export interface SeriesGame {
+  id: number;
+  dateISO: string;
+  time?: string;              // ISO 8601 start timestamp
+  status: GameStatus;
+  away: string;
+  home: string;
+  awayScore?: number;
+  homeScore?: number;
+}
+
+/** Every regular-season meeting between two teams, oldest first. Backs
+ *  GameDetail's season-series card and sheet. The tally is deliberately not
+ *  included — the client derives it (see lib/mlb/seasonSeries.ts) so the
+ *  game on screen can override its own, possibly stale, row. */
+export interface SeasonSeriesData {
+  season: number;
+  games: SeriesGame[];
+}
+
 export interface PersonnelRow {
   id?: number;
   name: string;

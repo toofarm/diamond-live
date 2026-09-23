@@ -9,7 +9,9 @@ export const events = {
   TEAM_SELECTION: "team_selection",
   CALENDAR_NAVIGATION: "calendar_navigation",
   VIEW_FULL_RECORD: "view_full_record",
+  VIEW_SEASON_SERIES: "view_season_series",
   THEME_CHANGE: "theme_change",
+  APP_ERROR: "app_error",
 } as const;
 
 type dataLayerEvent = {

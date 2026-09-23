@@ -31,6 +31,7 @@ import type {
   ProbableStarters,
   RosterRow,
   ScheduleGame,
+  SeriesGame,
   StandingsByDivision,
   StandingsRow,
   StatMode,
@@ -1130,6 +1131,45 @@ export function mapTeamGames(json: any, ourAbbr: string): TeamLastGame[] {
   }
   finals.sort((a, b) => (a.dateISO < b.dateISO ? 1 : -1));
   return finals;
+}
+
+/** Map a `/schedule?teamId={a}&opponentId={b}` response into the head-to-head
+ *  list behind GameDetail's season-series card. Unlike mapTeamGames this keeps
+ *  every status — the card counts games still to play.
+ *
+ *  A rescheduled game keeps its gamePk and shows up twice: once on the original
+ *  date as "Postponed" (or "Suspended"), once on the makeup date. Dedupe by
+ *  gamePk and keep the later-dated entry, which is the one that will actually
+ *  be played. Sorted oldest first, gamePk breaking doubleheader ties. */
+export function mapSeasonSeries(json: any): SeriesGame[] {
+  const byId = new Map<number, SeriesGame>();
+  for (const d of json?.dates ?? []) {
+    const dateISO: string = d?.date ?? "";
+    for (const g of d?.games ?? []) {
+      const awayId = g?.teams?.away?.team?.id;
+      const homeId = g?.teams?.home?.team?.id;
+      const away = awayId != null ? abbrByMlbId(awayId) : undefined;
+      const home = homeId != null ? abbrByMlbId(homeId) : undefined;
+      if (!away || !home || typeof g?.gamePk !== "number") continue;
+      const prev = byId.get(g.gamePk);
+      if (prev && prev.dateISO > dateISO) continue;
+      const awayScore = g?.teams?.away?.score;
+      const homeScore = g?.teams?.home?.score;
+      byId.set(g.gamePk, {
+        id: g.gamePk,
+        dateISO,
+        time: passThroughISO(g?.gameDate),
+        status: mapStatus(g?.status?.abstractGameState, g?.status?.detailedState),
+        away,
+        home,
+        awayScore: typeof awayScore === "number" ? awayScore : undefined,
+        homeScore: typeof homeScore === "number" ? homeScore : undefined,
+      });
+    }
+  }
+  return [...byId.values()].sort((a, b) =>
+    a.dateISO === b.dateISO ? a.id - b.id : a.dateISO < b.dateISO ? -1 : 1,
+  );
 }
 
 /** The Season tab's "Last 5 Games" table — the most recent slice of mapTeamGames. */
