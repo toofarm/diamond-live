@@ -1126,9 +1126,8 @@ function SeriesGameRow({
       data-cy-status={game.status}
       aria-current={isCurrent ? "true" : undefined}
       onClick={clickable ? () => onGame(game.id) : undefined}
-      className={`w-full grid items-center gap-2 px-3.5 md:px-4 py-2.5 bg-transparent border-none text-left ${
-        clickable ? "cursor-pointer hover:bg-active" : ""
-      } ${isCurrent ? "bg-active" : ""}`}
+      className={`w-full grid items-center gap-2 px-3.5 md:px-4 py-2.5 bg-transparent border-none text-left ${clickable ? "cursor-pointer hover:bg-active" : ""
+        } ${isCurrent ? "bg-active" : ""}`}
       style={{ gridTemplateColumns: cols }}
     >
       <span className="font-mono text-[12px] text-ink-2">
@@ -1909,7 +1908,7 @@ function BoxSection({
 /* ── Plays tab ────────────────────────────────────────────────── */
 
 function PlaysTab({ plays }: { plays: Play[] }) {
-  const [scoringOnly, setScoringOnly] = useState(false);
+  const [scoringOnly, setScoringOnly] = useState(true);
   // Slide the indicator between All/Scoring rather than toggling each pill's
   // own background. The key matches the `data-sliding-key` on each button;
   // paddingOffset (3) matches the `p-1` track — same value Leaders uses.
