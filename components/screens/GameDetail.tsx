@@ -804,8 +804,6 @@ function SummaryTab({
         />
       )}
 
-      <SeasonSeriesCard summary={summary} onGame={onGame} />
-
       {showWinProbability && winProbability && (
         <WinProbabilityCard
           away={summary.away}
@@ -835,6 +833,8 @@ function SummaryTab({
           ))}
         </div>
       </div>
+
+      <SeasonSeriesCard summary={summary} onGame={onGame} />
 
       {(summary.venue || summary.weather) && (
         <div className="bg-surface border border-line rounded-[14px] p-3.5 text-xs text-ink-2 font-ui leading-relaxed">
